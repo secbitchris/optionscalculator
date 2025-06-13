@@ -4,14 +4,18 @@ A comprehensive and flexible options analysis tool for SPY and SPX options, with
 
 ## 🎯 **Overview**
 
-This system helps identify optimal options contracts for any trading strategy with customizable movement expectations. It provides:
+This system helps identify optimal options contracts for any trading strategy with customizable movement expectations. It works **100% locally** with optional external integrations:
 
-- **Advanced Black-Scholes pricing** with Greeks calculation
+### 🏠 **Core Local Features:**
+- **Advanced Black-Scholes pricing** with complete Greeks calculation
 - **Probability analysis** (profit probability, ITM probability, breakeven)
 - **Multi-scenario R/R analysis** for different move expectations
 - **Flexible scoring algorithm** for optimal contract selection
-- **Polygon.io integration** for historical backtesting
-- **IBKR TWS API integration** for live trading automation
+- **Custom movement scenarios** for any trading strategy
+
+### 🌐 **Optional External Integrations:**
+- **Polygon.io integration** for historical backtesting (requires API key)
+- **IBKR TWS API integration** for live trading automation (requires IBKR account)
 
 ## 📁 **File Structure**
 
@@ -26,19 +30,35 @@ optionscalculator/
 ├── 📄 README.md                      # This documentation
 ├── 📄 requirements.txt               # Python dependencies
 ├── 🐍 option_scenario_calculator.py  # Core analysis engine
-├── 🐍 polygon_backtester_integration.py  # Polygon.io backtesting
-├── 🐍 ibkr_trading_bot_integration.py    # IBKR live trading
-└── 🐍 integration_examples.py        # Usage examples
+├── 🐍 standalone_example.py          # Standalone local usage example
+├── 🐍 polygon_backtester_integration.py  # Polygon.io backtesting (optional)
+├── 🐍 ibkr_trading_bot_integration.py    # IBKR live trading (optional)
+└── 🐍 integration_examples.py        # Advanced integration examples
 ```
 
 ## 🚀 **Quick Start**
 
-### Basic Analysis
+### Standalone Local Analysis (No APIs Required)
 ```bash
-# SPY analysis (default)
+# Basic SPY analysis with all calculations done locally
+python option_scenario_calculator.py --current-price 605.0 --dte 7 --iv 0.15
+
+# SPX analysis with custom parameters
+python option_scenario_calculator.py --underlying SPX --current-price 6000 --dte 14 --iv 0.20
+
+# Custom movement scenarios (earnings example)
+python option_scenario_calculator.py --expected-moves '{"earnings": 50.0, "normal": 15.0}' --current-price 605.0
+
+# Run standalone example with multiple scenarios
+python standalone_example.py
+```
+
+### Command Line Analysis
+```bash
+# SPY analysis (uses default price)
 python option_scenario_calculator.py
 
-# SPX analysis
+# SPX analysis 
 python option_scenario_calculator.py --underlying SPX
 
 # Custom parameters
@@ -86,10 +106,51 @@ pip install polygon-api-client
 pip install ib_insync
 ```
 
-### Manual Installation
+### Standalone Local Installation (Recommended)
 ```bash
-# Core requirements only
+# Core requirements only - works completely offline
 pip install numpy pandas scipy
+```
+
+**That's it!** The calculator works 100% locally with just these packages. No external APIs, internet connection, or additional setup required.
+
+## 💻 **Standalone Local Operation**
+
+The calculator is designed to work **completely offline** with no external dependencies beyond basic Python packages:
+
+### ✅ **What Works Locally:**
+- **Complete Black-Scholes analysis** with all Greeks
+- **Multi-scenario R/R calculations** for any custom movements
+- **Probability analysis** (profit probability, ITM probability, breakeven)
+- **Flexible scoring** for strategy optimization
+- **All output formats** (CSV, JSON, trading signals, backtester)
+
+### 📝 **You Only Need to Provide:**
+- **Current underlying price** (from any source: broker, Yahoo Finance, etc.)
+- **Days to expiration**
+- **Implied volatility** (estimate from VIX, historical volatility, etc.)
+- **Risk-free rate** (optional, defaults to 4.4%)
+
+### 🎯 **Perfect For:**
+- **Strategy development** without market data costs
+- **Educational purposes** and learning options pricing
+- **Offline analysis** when traveling or without internet
+- **Paper trading** and theoretical analysis
+- **Custom data integration** from your own sources
+
+### 📋 **Example Usage:**
+```python
+# See standalone_example.py for complete examples
+from option_scenario_calculator import OptionsAnalyzer
+
+analyzer = OptionsAnalyzer('SPY')
+results, summary = analyzer.analyze_options(
+    S=605.0,        # Current price
+    T=7/252,        # 7 days to expiration
+    r=0.044,        # 4.4% risk-free rate  
+    sigma=0.15,     # 15% implied volatility
+    dte_days=7
+)
 ```
 
 ## 📊 **Core Features**
@@ -240,24 +301,24 @@ bot.max_premium = 15.0              # Maximum premium per contract
 bot.max_positions = 5               # Maximum concurrent positions
 ```
 
-## 📋 **Trading Strategy Guidelines**
+## 📋 **Strategy Guidelines & Filtering**
 
-### Recommended Filters:
+### Sample Filtering Criteria:
 ```python
-# Entry Criteria
+# Entry Criteria (customize for your strategy)
 option_score > 0.35              # Minimum composite score
 abs(delta) > 0.3                 # Sufficient directional exposure
 premium < $15 (SPY) / $150 (SPX) # Affordable premium
 prob_profit > 0.25               # Reasonable win probability
 
-# Position Sizing
+# Position Sizing (example)
 max_risk = account_size * 0.02
 contracts = max_risk / (premium * 100)
 
 # Exit Rules (customize based on your strategy)
-profit_target = 50% of premium paid
-stop_loss = 25% of premium paid
-time_stop = 2-3 hours before close
+profit_target = 50% of premium paid    # For quick scalps
+stop_loss = 25% of premium paid       # Risk management
+time_stop = 1-2 hours before close    # Theta decay protection
 ```
 
 ### DTE Considerations:
