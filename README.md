@@ -16,12 +16,19 @@ This system helps identify optimal options contracts for day trading strategies 
 ## 📁 **File Structure**
 
 ```
-options_calculation/
-├── option_scenario_calculator.py      # Core analysis engine
-├── polygon_backtester_integration.py  # Polygon.io backtesting
-├── ibkr_trading_bot_integration.py   # IBKR live trading
-├── integration_examples.py           # Usage examples
-└── README.md                         # This file
+optionscalculator/
+├── 📁 data/                           # All output files (ignored by git)
+│   ├── .gitkeep                      # Keeps directory structure in git
+│   ├── *.csv                         # Analysis CSV files (auto-generated)
+│   ├── *.json                        # Analysis JSON files (auto-generated)
+│   └── backtest_*.json               # Backtest results (auto-generated)
+├── 📄 .gitignore                     # Protects sensitive data
+├── 📄 README.md                      # This documentation
+├── 📄 requirements.txt               # Python dependencies
+├── 🐍 option_scenario_calculator.py  # Core analysis engine
+├── 🐍 polygon_backtester_integration.py  # Polygon.io backtesting
+├── 🐍 ibkr_trading_bot_integration.py    # IBKR live trading
+└── 🐍 integration_examples.py        # Usage examples
 ```
 
 ## 🚀 **Quick Start**
@@ -37,7 +44,7 @@ python option_scenario_calculator.py --underlying SPX
 # Custom parameters
 python option_scenario_calculator.py --underlying SPY --dte 10 --iv 0.20 --current-price 605.50
 
-# Save results
+# Save results (automatically saved to data/ directory)
 python option_scenario_calculator.py --save --output-format json
 ```
 
@@ -47,21 +54,39 @@ python option_scenario_calculator.py --save --output-format json
 - `trading_bot`: Optimized for live trading integration
 - `backtester`: Structured for backtesting frameworks
 
+### 📁 **Data Organization**
+All output files are automatically saved to the `data/` directory:
+- Analysis results: `data/options_analysis_SPY_YYYYMMDD_HHMMSS.csv`
+- JSON summaries: `data/options_analysis_summary_SPY_YYYYMMDD_HHMMSS.json`  
+- Backtest data: `data/polygon_backtest_SPY_YYYYMMDD_HHMMSS.json`
+
+The `data/` directory is ignored by git to keep your repository clean while preserving all analysis locally.
+
 ## 🔧 **Installation**
 
-### Core Requirements
+### Quick Setup
 ```bash
-pip install numpy pandas scipy
+# Clone repository
+git clone git@github.com:secbitchris/optionscalculator.git
+cd optionscalculator
+
+# Install core dependencies
+pip install -r requirements.txt
 ```
 
-### For Polygon.io Backtesting
+### Additional Dependencies (Optional)
 ```bash
+# For Polygon.io backtesting
 pip install polygon-api-client
+
+# For IBKR live trading
+pip install ib_insync
 ```
 
-### For IBKR Live Trading
+### Manual Installation
 ```bash
-pip install ib_insync
+# Core requirements only
+pip install numpy pandas scipy
 ```
 
 ## 📊 **Core Features**
@@ -346,14 +371,56 @@ bot.run_trading_session(max_positions=3, check_interval=300)
 - **$2.50 move**: 0.15-0.30 typical
 - **Conservative**: 0.05-0.10 typical
 
+## 📁 **Data Management**
+
+### Automatic File Organization
+All output files are automatically organized in the `data/` directory:
+
+```
+data/
+├── options_analysis_SPY_20241201_143022.csv     # Analysis results
+├── options_analysis_summary_SPY_20241201_143022.json  # Summary data
+├── polygon_backtest_SPY_20241201_150000.json    # Backtest results
+└── trading_signals_SPY_20241201_160000.json     # Trading bot signals
+```
+
+### Git Integration
+The repository is configured to:
+- ✅ **Include** source code and documentation
+- ✅ **Include** empty `data/` directory structure
+- ❌ **Exclude** all generated files (`*.csv`, `*.json`, logs, etc.)
+- ❌ **Exclude** API keys and sensitive configuration
+
+### File Naming Convention
+```
+{analysis_type}_{underlying}_{YYYYMMDD}_{HHMMSS}.{extension}
+```
+
+Examples:
+- `options_analysis_SPY_20241201_143022.csv`
+- `polygon_backtest_SPX_20241201_150000.json`
+- `trading_signals_SPY_20241201_160000.json`
+
+### Cleanup Commands
+```bash
+# Remove all data files (keep directory structure)
+rm data/*.csv data/*.json
+
+# Remove files older than 7 days
+find data/ -name "*.csv" -mtime +7 -delete
+find data/ -name "*.json" -mtime +7 -delete
+```
+
 ## 🔄 **Version History**
 
 ### v2.0 (Current)
 - Added SPY/SPX dual support
-- Polygon.io backtesting integration
+- Polygon.io backtesting integration  
 - IBKR TWS API live trading
 - Enhanced scoring algorithm
 - Multi-scenario analysis
+- Automatic data directory management
+- Git repository structure
 
 ### v1.0
 - Basic Black-Scholes implementation

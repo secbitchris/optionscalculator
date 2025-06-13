@@ -1,19 +1,46 @@
-# Core dependencies
+# Core dependencies (required)
 numpy>=1.21.0
 pandas>=1.3.0
 scipy>=1.7.0
 
-# Optional dependencies for API integrations
-# Uncomment as needed:
+# Note: datetime, warnings, argparse, json are built-in Python modules
 
+# =============================================================================
+# OPTIONAL DEPENDENCIES
+# Uncomment sections below as needed for specific integrations
+# =============================================================================
+
+# -----------------------------------------------------------------------------
 # For Polygon.io backtesting integration
+# Uncomment to enable historical data backtesting
+# -----------------------------------------------------------------------------
 # polygon-api-client>=1.0.0
+# requests>=2.25.0
 
+# -----------------------------------------------------------------------------  
 # For IBKR TWS API live trading
+# Uncomment to enable live trading automation
+# -----------------------------------------------------------------------------
 # ib_insync>=0.9.86
+# nest_asyncio>=1.5.0
 
+# -----------------------------------------------------------------------------
 # Development and testing (optional)
+# Uncomment for development environment
+# -----------------------------------------------------------------------------
 # jupyter>=1.0.0
+# matplotlib>=3.3.0
+# seaborn>=0.11.0
+# plotly>=5.0.0
 # pytest>=6.0.0
 # black>=21.0.0
-# flake8>=3.9.0 
+# flake8>=3.9.0
+# mypy>=0.900
+
+# -----------------------------------------------------------------------------
+# Data analysis enhancements (optional)
+# Uncomment for enhanced data processing
+# -----------------------------------------------------------------------------
+# yfinance>=0.1.70  # Alternative data source
+# ta-lib>=0.4.0     # Technical analysis
+# openpyxl>=3.0.0   # Excel file support 
