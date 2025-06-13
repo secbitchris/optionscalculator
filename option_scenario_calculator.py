@@ -20,10 +20,9 @@ class OptionsAnalyzer:
                 'strike_increment': 2.5,
                 'strike_range_width': 35,  # +/- from ATM
                 'expected_moves': {
-                    'small_move': 1.25,
-                    'medium_move': 2.50,
-                    'large_move': 4.00,
-                    'conservative': 0.75
+                    'target_move': 2.0,      # Primary expected move
+                    'conservative': 1.0,     # Conservative scenario
+                    'aggressive': 3.0        # Aggressive scenario
                 },
                 'min_premium': 0.05,
                 'max_premium': 50.0
@@ -34,10 +33,9 @@ class OptionsAnalyzer:
                 'strike_increment': 25,
                 'strike_range_width': 350,  # +/- from ATM
                 'expected_moves': {
-                    'small_move': 12.5,
-                    'medium_move': 25.0,
-                    'large_move': 40.0,
-                    'conservative': 7.5
+                    'target_move': 20.0,     # Primary expected move
+                    'conservative': 10.0,    # Conservative scenario  
+                    'aggressive': 30.0       # Aggressive scenario
                 },
                 'min_premium': 0.50,
                 'max_premium': 500.0
@@ -278,8 +276,7 @@ class OptionsAnalyzer:
                 'delta': row['delta'],
                 'day_trade_score': row['day_trade_score'],
                 'prob_profit': row['prob_profit'],
-                'small_move_rr': row['small_move_rr'],
-                'medium_move_rr': row['medium_move_rr'],
+                'move_scenarios': {k: v for k, v in row.items() if k.endswith('_rr')},
                 'breakeven': row['breakeven'],
                 'max_loss': row['max_loss'],
                 'entry_signal': 'BUY' if row['day_trade_score'] > 0.3 else 'WATCH',
@@ -324,18 +321,17 @@ class OptionsAnalyzer:
                 'theta': row['theta'],
                 'vega': row['vega'],
                 'day_trade_score': row['day_trade_score'],
-                'expected_moves': {
-                    'small': row['small_move_rr'],
-                    'medium': row['medium_move_rr'],
-                    'large': row['large_move_rr']
-                }
+                'expected_moves': {k.replace('_rr', ''): v for k, v in row.items() if k.endswith('_rr')}
             }
             backtest_data['universe'].append(option_data)
         
         # Create rankings for different strategies
+        rr_columns = [col for col in df.columns if col.endswith('_rr')]
+        primary_rr = rr_columns[0] if rr_columns else 'day_trade_score'
+        
         backtest_data['rankings'] = {
             'high_delta': df.nlargest(10, 'delta')['strike'].tolist(),
-            'best_rr': df.nlargest(10, 'small_move_rr')['strike'].tolist(),
+            'best_rr': df.nlargest(10, primary_rr)['strike'].tolist(),
             'day_trade_score': df.nlargest(10, 'day_trade_score')['strike'].tolist(),
             'cheap_options': df.nsmallest(10, 'premium')['strike'].tolist()
         }
@@ -372,13 +368,15 @@ class OptionsAnalyzer:
             return json_filename
 
 def main():
-    parser = argparse.ArgumentParser(description='Options Analysis for Day Trading')
+    parser = argparse.ArgumentParser(description='Flexible Options Analysis Calculator')
     parser.add_argument('--underlying', choices=['SPY', 'SPX'], default='SPY', 
                        help='Underlying asset to analyze')
     parser.add_argument('--current-price', type=float, help='Current underlying price')
     parser.add_argument('--dte', type=int, default=8, help='Days to expiration')
     parser.add_argument('--iv', type=float, default=0.132, help='Implied volatility')
     parser.add_argument('--rate', type=float, default=0.044, help='Risk-free rate')
+    parser.add_argument('--expected-moves', type=str, 
+                       help='Expected moves as JSON string, e.g. \'{"target": 2.0, "conservative": 1.0}\'')
     parser.add_argument('--output-format', choices=['dataframe', 'json', 'trading_bot', 'backtester'], 
                        default='dataframe', help='Output format')
     parser.add_argument('--save', action='store_true', help='Save results to file')
@@ -388,9 +386,22 @@ def main():
     # Initialize analyzer
     analyzer = OptionsAnalyzer(args.underlying)
     
-    # Update price if provided
+    # Update configuration
+    config_updates = {}
     if args.current_price:
-        analyzer.update_config(current_price=args.current_price)
+        config_updates['current_price'] = args.current_price
+    
+    # Parse custom expected moves if provided
+    if args.expected_moves:
+        try:
+            expected_moves = json.loads(args.expected_moves)
+            config_updates['expected_moves'] = expected_moves
+        except json.JSONDecodeError:
+            print("Error: Invalid JSON format for expected-moves")
+            return
+    
+    if config_updates:
+        analyzer.update_config(**config_updates)
     
     # Get current price from config
     S = analyzer.config['current_price']
@@ -398,11 +409,12 @@ def main():
     r = args.rate
     sigma = args.iv
     
-    print(f"\n{args.underlying} Options Day Trading Analysis")
+    print(f"\n{args.underlying} Options Analysis")
     print("=" * 60)
     print(f"Current {args.underlying} Price: ${S:.2f}")
     print(f"Days to Expiration: {args.dte}")
     print(f"Implied Volatility: {sigma:.1%}")
+    print(f"Expected Moves: {analyzer.config['expected_moves']}")
     print(f"Output Format: {args.output_format}")
     
     # Run analysis

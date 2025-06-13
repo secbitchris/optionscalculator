@@ -1,15 +1,15 @@
-# SPY/SPX Options Day Trading Analysis System
+# SPY/SPX Options Analysis System
 
-A comprehensive options analysis tool designed for day trading SPY and SPX options, with integrated support for Polygon.io backtesting and IBKR TWS API live trading.
+A comprehensive and flexible options analysis tool for SPY and SPX options, with integrated support for Polygon.io backtesting and IBKR TWS API live trading.
 
 ## 🎯 **Overview**
 
-This system helps identify optimal options contracts for day trading strategies that typically capture $1-$1.50 (SPY) or $10-$15 (SPX) of underlying movement. It provides:
+This system helps identify optimal options contracts for any trading strategy with customizable movement expectations. It provides:
 
 - **Advanced Black-Scholes pricing** with Greeks calculation
 - **Probability analysis** (profit probability, ITM probability, breakeven)
 - **Multi-scenario R/R analysis** for different move expectations
-- **Day trading scoring algorithm** for optimal contract selection
+- **Flexible scoring algorithm** for optimal contract selection
 - **Polygon.io integration** for historical backtesting
 - **IBKR TWS API integration** for live trading automation
 
@@ -43,6 +43,9 @@ python option_scenario_calculator.py --underlying SPX
 
 # Custom parameters
 python option_scenario_calculator.py --underlying SPY --dte 10 --iv 0.20 --current-price 605.50
+
+# Custom movement scenarios
+python option_scenario_calculator.py --expected-moves '{"target": 3.0, "conservative": 1.5, "breakout": 5.0}'
 
 # Save results (automatically saved to data/ directory)
 python option_scenario_calculator.py --save --output-format json
@@ -101,9 +104,9 @@ pip install numpy pandas scipy
 - **SPX**: $25 increments, ±$350 range around ATM
 - Dynamic range adjustment based on DTE
 
-### 3. **Day Trading Score Algorithm**
+### 3. **Flexible Scoring Algorithm**
 ```python
-Day_Trade_Score = (
+Option_Score = (
     abs(Delta) * 0.4 +           # 40% - Directional exposure
     R_R_Ratio * 0.3 +            # 30% - Risk/reward for target move
     Affordability * 0.2 +         # 20% - Capital efficiency
@@ -111,11 +114,11 @@ Day_Trade_Score = (
 )
 ```
 
-### 4. **Multi-Scenario Analysis**
-- **Small move**: $1.25 (SPY) / $12.50 (SPX)
-- **Medium move**: $2.50 (SPY) / $25.00 (SPX)  
-- **Large move**: $4.00 (SPY) / $40.00 (SPX)
-- **Conservative**: $0.75 (SPY) / $7.50 (SPX)
+### 4. **Customizable Multi-Scenario Analysis**
+Define any movement scenarios you want to analyze:
+- **Default SPY**: Target $2.0, Conservative $1.0, Aggressive $3.0
+- **Default SPX**: Target $20.0, Conservative $10.0, Aggressive $30.0
+- **Custom**: Any movements via `--expected-moves '{"breakout": 5.0, "pullback": 2.0}'`
 
 ## 🔍 **Analysis Output**
 
@@ -219,9 +222,9 @@ analyzer.update_config(
     strike_increment=2.5,
     strike_range_width=35,
     expected_moves={
-        'small_move': 1.25,
-        'medium_move': 2.50,
-        'large_move': 4.00
+        'target_move': 2.0,      # Your primary expected move
+        'conservative': 1.0,     # Conservative scenario
+        'aggressive': 3.0        # Aggressive scenario
     },
     min_premium=0.05,
     max_premium=50.0
@@ -232,7 +235,7 @@ analyzer.update_config(
 ```python
 bot = IBKRTradingBot('SPY')
 bot.risk_per_trade = 0.02           # 2% risk per trade
-bot.min_day_trade_score = 0.35      # Minimum score threshold
+bot.min_score = 0.35               # Minimum score threshold
 bot.max_premium = 15.0              # Maximum premium per contract
 bot.max_positions = 5               # Maximum concurrent positions
 ```
@@ -242,25 +245,26 @@ bot.max_positions = 5               # Maximum concurrent positions
 ### Recommended Filters:
 ```python
 # Entry Criteria
-day_trade_score > 0.35
-abs(delta) > 0.3
-premium < $15 (SPY) / $150 (SPX)
-prob_profit > 0.25
+option_score > 0.35              # Minimum composite score
+abs(delta) > 0.3                 # Sufficient directional exposure
+premium < $15 (SPY) / $150 (SPX) # Affordable premium
+prob_profit > 0.25               # Reasonable win probability
 
 # Position Sizing
 max_risk = account_size * 0.02
 contracts = max_risk / (premium * 100)
 
-# Exit Rules
+# Exit Rules (customize based on your strategy)
 profit_target = 50% of premium paid
 stop_loss = 25% of premium paid
 time_stop = 2-3 hours before close
 ```
 
-### Optimal DTE Ranges:
+### DTE Considerations:
 - **3-5 DTE**: High gamma, rapid time decay, more directional
-- **7-10 DTE**: Balanced theta/delta exposure ⭐ **Recommended**
+- **7-10 DTE**: Balanced theta/delta exposure
 - **14+ DTE**: Lower gamma, more time value, less responsive
+- **Choose based on your strategy**: Short-term moves vs longer-term positions
 
 ## 🎛️ **Command Line Interface**
 
@@ -274,6 +278,7 @@ python option_scenario_calculator.py --help
 --dte INT                        # Days to expiration
 --iv FLOAT                       # Implied volatility
 --rate FLOAT                     # Risk-free rate
+--expected-moves STRING          # Custom moves as JSON
 --output-format {dataframe,json,trading_bot,backtester}
 --save                           # Save results to file
 ```
@@ -353,23 +358,24 @@ bot.run_trading_session(max_positions=3, check_interval=300)
 - Use higher-tier subscription for more requests
 - Implement exponential backoff
 
-**Low Day Trading Scores**
-- Adjust expected move parameters
+**Low Option Scores**
+- Adjust expected move parameters for your strategy
 - Check current volatility environment
 - Verify strike range includes optimal contracts
 
 ## 📈 **Performance Expectations**
 
-### Typical Day Trading Scores:
+### Typical Option Scores:
 - **>0.40**: Excellent opportunities (rare)
-- **0.30-0.40**: Good opportunities ⭐ **Target range**
+- **0.30-0.40**: Good opportunities
 - **0.20-0.30**: Marginal opportunities
 - **<0.20**: Poor opportunities (avoid)
 
 ### Expected R/R Ratios:
-- **$1.25 move**: 0.08-0.15 typical
-- **$2.50 move**: 0.15-0.30 typical
-- **Conservative**: 0.05-0.10 typical
+Varies based on your expected moves and market conditions:
+- **Small moves**: 0.05-0.15 typical
+- **Medium moves**: 0.15-0.30 typical
+- **Large moves**: 0.30+ possible
 
 ## 📁 **Data Management**
 
