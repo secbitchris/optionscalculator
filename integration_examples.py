@@ -78,9 +78,13 @@ class BacktesterIntegration:
     
     def export_for_backtest(self, filename=None):
         """Export results in format suitable for backtesting framework"""
+        import os
+        
+        # Ensure data directory exists
+        os.makedirs('data', exist_ok=True)
         
         if filename is None:
-            filename = f"backtest_data_{self.analyzer.underlying}_{datetime.now().strftime('%Y%m%d')}.json"
+            filename = f"data/backtest_data_{self.analyzer.underlying}_{datetime.now().strftime('%Y%m%d')}.json"
         
         export_data = {
             'underlying': self.analyzer.underlying,

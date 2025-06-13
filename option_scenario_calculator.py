@@ -343,25 +343,30 @@ class OptionsAnalyzer:
         return backtest_data
 
     def save_analysis(self, analysis_data, filename_prefix="options_analysis"):
-        """Save analysis in multiple formats"""
+        """Save analysis in multiple formats to data directory"""
+        import os
+        
+        # Ensure data directory exists
+        os.makedirs('data', exist_ok=True)
+        
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         
         if isinstance(analysis_data, tuple):
             df, summary = analysis_data
             
             # Save CSV
-            csv_filename = f"{filename_prefix}_{self.underlying}_{timestamp}.csv"
+            csv_filename = f"data/{filename_prefix}_{self.underlying}_{timestamp}.csv"
             df.to_csv(csv_filename, index=False)
             
             # Save JSON summary
-            json_filename = f"{filename_prefix}_summary_{self.underlying}_{timestamp}.json"
+            json_filename = f"data/{filename_prefix}_summary_{self.underlying}_{timestamp}.json"
             with open(json_filename, 'w') as f:
                 json.dump(summary, f, indent=2, default=str)
                 
             return csv_filename, json_filename
         else:
             # Save JSON format
-            json_filename = f"{filename_prefix}_{self.underlying}_{timestamp}.json"
+            json_filename = f"data/{filename_prefix}_{self.underlying}_{timestamp}.json"
             with open(json_filename, 'w') as f:
                 json.dump(analysis_data, f, indent=2, default=str)
             return json_filename

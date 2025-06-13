@@ -142,7 +142,11 @@ config.ini
 .env.local
 .env.production
 
-# Analysis Output Files
+# Data Directory - Ignore all contents except .gitkeep
+data/*
+!data/.gitkeep
+
+# Analysis Output Files (legacy - now goes in data/)
 *.csv
 options_analysis_*.csv
 enhanced_spy_options_analysis.csv
@@ -150,7 +154,7 @@ option_scenario_analysis.csv
 backtest_data_*.json
 polygon_backtest_*.json
 
-# Generated Analysis Files
+# Generated Analysis Files (legacy - now goes in data/)
 options_analysis_*.json
 *_analysis_*.json
 *_summary_*.json

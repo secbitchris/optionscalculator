@@ -291,10 +291,16 @@ class PolygonBacktester:
     
     def export_for_analysis(self, backtest_data: Dict, filename: str = None) -> str:
         """Export backtest data for further analysis"""
+        import os
+        
+        # Ensure data directory exists
+        os.makedirs('data', exist_ok=True)
         
         if filename is None:
             timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-            filename = f"polygon_backtest_{self.underlying}_{timestamp}.json"
+            filename = f"data/polygon_backtest_{self.underlying}_{timestamp}.json"
+        elif not filename.startswith('data/'):
+            filename = f"data/{filename}"
         
         with open(filename, 'w') as f:
             json.dump(backtest_data, f, indent=2, default=str)
