@@ -29,6 +29,7 @@ optionscalculator/
 ├── 📄 .gitignore                     # Protects sensitive data
 ├── 📄 README.md                      # This documentation
 ├── 📄 requirements.txt               # Python dependencies
+├── 📄 IBKR_MIGRATION_GUIDE.md        # Guide for updating IBKR APIs
 ├── 🐍 option_scenario_calculator.py  # Core analysis engine
 ├── 🐍 standalone_example.py          # Standalone local usage example
 ├── 🐍 polygon_backtester_integration.py  # Polygon.io backtesting (optional)
@@ -102,8 +103,10 @@ pip install -r requirements.txt
 # For Polygon.io backtesting
 pip install polygon-api-client
 
-# For IBKR live trading
-pip install ib_insync
+# For IBKR live trading - choose one:
+pip install ib_async           # Modern async wrapper (recommended)
+pip install ibapi             # Official IBKR Python API
+# OR download from: https://interactivebrokers.github.io/
 ```
 
 ### Standalone Local Installation (Recommended)
@@ -237,16 +240,32 @@ performance = backtester.analyze_backtest_performance(results)
 ## 🤖 **IBKR TWS API Live Trading**
 
 ### Setup
-1. Install TWS or IB Gateway
-2. Enable API connections in TWS/Gateway settings
-3. Install: `pip install ib_insync`
+1. **Install TWS or IB Gateway** from [Interactive Brokers](https://www.interactivebrokers.com/en/trading/tws.php)
+2. **Enable API connections** in TWS/Gateway settings
+3. **Choose your Python API**:
+
+#### Option A: ib_async (Recommended - Modern Async)
+```bash
+pip install ib_async
+```
+
+#### Option B: Official IBKR API
+```bash
+# Via pip (if available)
+pip install ibapi
+
+# OR download directly from IBKR
+# Visit: https://interactivebrokers.github.io/
+# Download the Python API package
+```
 
 ### Configuration:
 - **Paper Trading**: Port 7497 (default)
-- **Live Trading**: Port 7496
+- **Live Trading**: Port 7496  
+- **Client ID**: Each connection needs unique ID (0-32)
 - **API Settings**: Enable "Download open orders on connection"
 
-### Usage
+### Usage with ib_async
 ```python
 from ibkr_trading_bot_integration import IBKRTradingBot
 
@@ -266,12 +285,42 @@ for signal in signals[:3]:
 bot.run_trading_session(max_positions=3, check_interval=300)
 ```
 
+### Usage with Official IBKR API (ibapi)
+```python
+# For direct integration with official IBKR API
+from ib.ext.Contract import Contract
+from ib.ext.Order import Order
+from ib.opt import Connection
+
+# Example connection setup
+conn = Connection.create(port=7497, clientId=0)
+conn.connect()
+
+# Create option contract
+contract = Contract()
+contract.m_symbol = "SPY"
+contract.m_secType = "OPT"
+contract.m_expiry = "20241220"
+contract.m_strike = 605.0
+contract.m_right = "C"  # Call
+contract.m_exchange = "SMART"
+
+# Place order
+order = Order()
+order.m_action = "BUY"
+order.m_totalQuantity = 1
+order.m_orderType = "MKT"
+
+conn.placeOrder(1, contract, order)
+```
+
 ### Features:
 - **Real-time market data** integration
 - **Automated opportunity scanning**
 - **Risk-based position sizing**
 - **Portfolio management** and P&L tracking
 - **Event-driven order management**
+- **Multiple API options** for different use cases
 
 ## ⚙️ **Configuration Options**
 
@@ -299,6 +348,8 @@ bot.risk_per_trade = 0.02           # 2% risk per trade
 bot.min_score = 0.35               # Minimum score threshold
 bot.max_premium = 15.0              # Maximum premium per contract
 bot.max_positions = 5               # Maximum concurrent positions
+
+# Note: Current integration uses ib_insync - update to ib_async for latest version
 ```
 
 ## 📋 **Strategy Guidelines & Filtering**
@@ -410,9 +461,13 @@ bot.run_trading_session(max_positions=3, check_interval=300)
 - Solution: Ensure column names are lowercase in DataFrame operations
 
 **IBKR Connection Failed**
-- Check TWS/Gateway is running
-- Verify API settings enabled
+- Check TWS/Gateway is running and logged in
+- Verify API settings enabled in Global Configuration
 - Confirm correct port (7497 paper, 7496 live)
+- Ensure unique Client ID (0-32, no duplicates)
+- Check firewall/antivirus blocking connections
+- For ib_async: `pip install ib_async` (not ib_insync)
+- For ibapi: Download from official IBKR site if pip fails
 
 **Polygon.io Rate Limits**
 - Add delays between API calls

@@ -20,9 +20,16 @@ scipy>=1.7.0
 # -----------------------------------------------------------------------------  
 # For IBKR TWS API live trading
 # Uncomment to enable live trading automation
+# Choose one of the following options:
 # -----------------------------------------------------------------------------
-# ib_insync>=0.9.86
+
+# Option A: Modern async wrapper (recommended)
+# ib_async>=0.9.86
 # nest_asyncio>=1.5.0
+
+# Option B: Official IBKR API  
+# ibapi>=9.80.0
+# Note: Can also download from https://interactivebrokers.github.io/
 
 # -----------------------------------------------------------------------------
 # Development and testing (optional)
