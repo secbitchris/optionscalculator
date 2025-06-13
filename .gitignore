@@ -1,0 +1,241 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# C extensions
+*.so
+
+# Distribution / packaging
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+pip-wheel-metadata/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# PyInstaller
+#  Usually these files are written by a python script from a template
+#  before PyInstaller builds the exe, so as to inject date/other infos into it.
+*.manifest
+*.spec
+
+# Installer logs
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Unit test / coverage reports
+htmlcov/
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.py,cover
+.hypothesis/
+.pytest_cache/
+
+# Translations
+*.mo
+*.pot
+
+# Django stuff:
+*.log
+local_settings.py
+db.sqlite3
+db.sqlite3-journal
+
+# Flask stuff:
+instance/
+.webassets-cache
+
+# Scrapy stuff:
+.scrapy
+
+# Sphinx documentation
+docs/_build/
+
+# PyBuilder
+target/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# IPython
+profile_default/
+ipython_config.py
+
+# pyenv
+.python-version
+
+# pipenv
+#   According to pypa/pipenv#598, it is recommended to include Pipfile.lock in version control.
+#   However, in case of collaboration, if having platform-specific dependencies or dependencies
+#   having no cross-platform support, pipenv may install dependencies that don't work, or not
+#   install all needed dependencies.
+#Pipfile.lock
+
+# PEP 582; used by e.g. github.com/David-OConnor/pyflow
+__pypackages__/
+
+# Celery stuff
+celerybeat-schedule
+celerybeat.pid
+
+# SageMath parsed files
+*.sage.py
+
+# Environments
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# Spyder project settings
+.spyderproject
+.spyproject
+
+# Rope project settings
+.ropeproject
+
+# mkdocs documentation
+/site
+
+# mypy
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# Pyre type checker
+.pyre/
+
+# =============================================================================
+# Project Specific
+# =============================================================================
+
+# API Keys and Sensitive Data
+*.key
+api_keys.py
+api_keys.json
+secrets.py
+secrets.json
+config.ini
+.env.local
+.env.production
+
+# Analysis Output Files
+*.csv
+options_analysis_*.csv
+enhanced_spy_options_analysis.csv
+option_scenario_analysis.csv
+backtest_data_*.json
+polygon_backtest_*.json
+
+# Generated Analysis Files
+options_analysis_*.json
+*_analysis_*.json
+*_summary_*.json
+test_*.json
+*_test.json
+
+# Trading Bot Logs and Data
+trading_logs/
+*.log
+trades_*.json
+positions_*.json
+orders_*.json
+
+# IBKR TWS Files
+ibkr_logs/
+tws_logs/
+*.audit
+ib_*.log
+DU*.xml
+Settings/
+
+# Polygon.io Cache
+polygon_cache/
+*.cache
+market_data_cache/
+
+# Jupyter Notebooks (if you create any)
+*.ipynb
+
+# Temporary Analysis Files
+temp_*.py
+scratch_*.py
+test_*.py
+debug_*.py
+
+# Data Files
+data/
+*.pkl
+*.pickle
+*.h5
+*.hdf5
+
+# Backup Files
+*.bak
+*.backup
+*~
+*.swp
+*.swo
+
+# IDE and Editor Files
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+.atom/
+
+# OS Generated Files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Windows
+*.lnk
+
+# Linux
+*~
+
+# Temporary Files
+tmp/
+temp/
+*.tmp
+
+# =============================================================================
+# Keep These Example Files (Override ignores)
+# =============================================================================
+
+# Keep example configuration files
+!config_example.py
+!api_keys_example.json
+!.env.example
+
+# Keep sample data for testing
+!sample_data/
+!test_data/ 
