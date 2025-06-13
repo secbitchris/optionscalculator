@@ -1,6 +1,7 @@
 import numpy as np
 import pandas as pd
 from scipy.stats import norm
+from scipy.optimize import brentq
 import json
 import argparse
 from datetime import datetime, timedelta
@@ -11,6 +12,7 @@ class OptionsAnalyzer:
     def __init__(self, underlying='SPY'):
         self.underlying = underlying.upper()
         self.config = self._get_default_config()
+        self.greeks_scaling = 'daily'  # 'daily', 'per_minute', or 'annual'
     
     def _get_default_config(self):
         """Get default configuration based on underlying"""
@@ -25,7 +27,9 @@ class OptionsAnalyzer:
                     'aggressive': 3.0        # Aggressive scenario
                 },
                 'min_premium': 0.05,
-                'max_premium': 50.0
+                'max_premium': 50.0,
+                'price_adjustment': 0.0,  # Price adjustment for scenarios
+                'mark_vs_theoretical': 'theoretical'  # 'theoretical' or 'mark'
             }
         else:  # SPX
             return {
@@ -38,15 +42,129 @@ class OptionsAnalyzer:
                     'aggressive': 30.0       # Aggressive scenario
                 },
                 'min_premium': 0.50,
-                'max_premium': 500.0
+                'max_premium': 500.0,
+                'price_adjustment': 0.0,  # Price adjustment for scenarios
+                'mark_vs_theoretical': 'theoretical'  # 'theoretical' or 'mark'
             }
     
     def update_config(self, **kwargs):
         """Update configuration parameters"""
         self.config.update(kwargs)
     
+    def set_greeks_scaling(self, scaling='daily'):
+        """Set Greeks scaling: 'daily', 'per_minute', or 'annual'"""
+        if scaling not in ['daily', 'per_minute', 'annual']:
+            raise ValueError("Scaling must be 'daily', 'per_minute', or 'annual'")
+        self.greeks_scaling = scaling
+
+    def implied_volatility_calculator(self, market_price, S, K, T, r, option_type='call'):
+        """
+        Calculate implied volatility from market price (reverse Black-Scholes)
+        
+        Parameters:
+        market_price: Market price of the option
+        S: Current underlying price
+        K: Strike price
+        T: Time to expiration (years)
+        r: Risk-free rate
+        option_type: 'call' or 'put'
+        
+        Returns:
+        dict with IV and related metrics
+        """
+        def bs_price_diff(sigma):
+            bs_result = self.black_scholes_price(S, K, T, r, sigma, option_type)
+            return bs_result['price'] - market_price
+        
+        try:
+            # Use Brent's method to find IV (typically between 0.01% and 500%)
+            iv = brentq(bs_price_diff, 0.0001, 5.0, xtol=1e-6)
+            
+            # Calculate additional metrics
+            bs_result = self.black_scholes_price(S, K, T, r, iv, option_type)
+            
+            # Calculate IV range for price sensitivity
+            iv_high = iv * 1.1  # +10% IV
+            iv_low = iv * 0.9   # -10% IV
+            
+            bs_high = self.black_scholes_price(S, K, T, r, iv_high, option_type)
+            bs_low = self.black_scholes_price(S, K, T, r, iv_low, option_type)
+            
+            return {
+                'implied_volatility': iv,
+                'market_price': market_price,
+                'theoretical_price': bs_result['price'],
+                'price_difference': market_price - bs_result['price'],
+                'iv_high': iv_high,
+                'iv_low': iv_low,
+                'price_at_iv_high': bs_high['price'],
+                'price_at_iv_low': bs_low['price'],
+                'vega': bs_result['vega'],
+                'delta': bs_result['delta'],
+                'gamma': bs_result['gamma'],
+                'theta': bs_result['theta'],
+                'iv_percentile': None  # Would need historical data
+            }
+            
+        except ValueError:
+            return {
+                'implied_volatility': None,
+                'error': 'Could not converge on IV solution',
+                'market_price': market_price,
+                'possible_issues': [
+                    'Price may be outside reasonable bounds',
+                    'Option may be deeply ITM/OTM',
+                    'Very short/long time to expiration'
+                ]
+            }
+
+    def price_adjustment_scenario(self, base_price, adjustment):
+        """
+        Apply price adjustment for scenario modeling
+        
+        Parameters:
+        base_price: Current underlying price
+        adjustment: Dollar adjustment (can be positive or negative)
+        
+        Returns:
+        Adjusted price and scenario description
+        """
+        adjusted_price = base_price + adjustment
+        
+        scenario_type = "neutral"
+        if adjustment > 0:
+            scenario_type = "bullish"
+        elif adjustment < 0:
+            scenario_type = "bearish"
+        
+        return {
+            'base_price': base_price,
+            'adjustment': adjustment,
+            'adjusted_price': adjusted_price,
+            'scenario_type': scenario_type,
+            'percentage_change': (adjustment / base_price) * 100
+        }
+
+    def _scale_greeks(self, greeks_dict, T):
+        """Scale Greeks based on selected scaling method"""
+        scaled = greeks_dict.copy()
+        
+        if self.greeks_scaling == 'per_minute':
+            # Convert daily to per-minute
+            scaled['theta'] = scaled['theta'] / (24 * 60)  # Daily to per-minute
+            scaled['rho'] = scaled['rho'] / 100  # Per 100bp to per 1bp
+            
+        elif self.greeks_scaling == 'annual':
+            # Convert to annual values
+            scaled['theta'] = scaled['theta'] * 365  # Daily to annual
+            scaled['vega'] = scaled['vega'] * 100  # Per 1% to per 100%
+            
+        # Daily is the default, no scaling needed
+        
+        return scaled
+
     def black_scholes_price(self, S, K, T, r, sigma, option_type='call'):
-        """Enhanced Black-Scholes with better error handling"""
+        """Enhanced Black-Scholes with better error handling and scaling"""
         if T <= 0:
             if option_type == 'call':
                 return {'price': max(S - K, 0), 'delta': 1 if S > K else 0, 'gamma': 0, 
@@ -78,9 +196,51 @@ class OptionsAnalyzer:
         
         vega = S * norm.pdf(d1) * np.sqrt(T) / 100
 
-        return {
+        greeks = {
             'price': price, 'delta': delta, 'gamma': gamma,
             'theta': theta, 'vega': vega, 'rho': rho, 'd1': d1, 'd2': d2
+        }
+        
+        # Apply scaling
+        return self._scale_greeks(greeks, T)
+
+    def calculate_mark_price(self, theoretical_price, S, K, option_type, liquidity_factor=1.0):
+        """
+        Calculate mark price (bid/ask midpoint estimate) vs theoretical price
+        
+        Parameters:
+        theoretical_price: Black-Scholes theoretical price
+        S: Underlying price
+        K: Strike price  
+        option_type: 'call' or 'put'
+        liquidity_factor: Adjustment for liquidity (1.0 = normal, >1.0 = wider spreads)
+        
+        Returns:
+        dict with mark price and spread estimates
+        """
+        # Simple mark price model - in reality this would use market data
+        moneyness = S / K if option_type == 'call' else K / S
+        
+        # Estimate bid-ask spread based on moneyness and liquidity
+        if 0.95 <= moneyness <= 1.05:  # ATM
+            spread_pct = 0.02 * liquidity_factor  # 2% spread
+        elif 0.90 <= moneyness <= 1.10:  # Near money
+            spread_pct = 0.03 * liquidity_factor  # 3% spread
+        else:  # Far OTM/ITM
+            spread_pct = 0.05 * liquidity_factor  # 5% spread
+        
+        spread = theoretical_price * spread_pct
+        bid = theoretical_price - spread / 2
+        ask = theoretical_price + spread / 2
+        mark = (bid + ask) / 2  # Should equal theoretical in this simple model
+        
+        return {
+            'theoretical_price': theoretical_price,
+            'mark_price': mark,
+            'bid': max(0.01, bid),  # Minimum 1 cent bid
+            'ask': ask,
+            'spread': spread,
+            'spread_percentage': spread_pct * 100
         }
 
     def calculate_probability_profit(self, S, K, T, r, sigma, option_type):
@@ -126,13 +286,25 @@ class OptionsAnalyzer:
     def analyze_options(self, S, T, r, sigma, dte_days, output_format='dataframe'):
         """Main analysis function with multiple output formats"""
         
+        # Apply price adjustment if configured
+        price_adjustment = self.config.get('price_adjustment', 0.0)
+        if price_adjustment != 0.0:
+            adjustment_info = self.price_adjustment_scenario(S, price_adjustment)
+            S_adjusted = adjustment_info['adjusted_price']
+            print(f"Price Adjustment: {adjustment_info['scenario_type'].title()} scenario, "
+                  f"${adjustment_info['base_price']:.2f} → ${S_adjusted:.2f} "
+                  f"({adjustment_info['percentage_change']:+.1f}%)")
+        else:
+            S_adjusted = S
+            adjustment_info = None
+        
         # Generate strike range
-        strike_range = self.generate_strike_range(S, dte_days)
+        strike_range = self.generate_strike_range(S_adjusted, dte_days)
         expected_moves = self.config['expected_moves']
         
         # Analyze both calls and puts
-        call_df = self._generate_option_table(S, T, r, sigma, strike_range, 'call', expected_moves)
-        put_df = self._generate_option_table(S, T, r, sigma, strike_range, 'put', expected_moves)
+        call_df = self._generate_option_table(S_adjusted, T, r, sigma, strike_range, 'call', expected_moves)
+        put_df = self._generate_option_table(S_adjusted, T, r, sigma, strike_range, 'put', expected_moves)
         
         # Combine results
         combined_df = pd.concat([call_df, put_df], ignore_index=True)
@@ -144,7 +316,9 @@ class OptionsAnalyzer:
         ]
         
         # Prepare analysis summary
-        analysis_summary = self._generate_summary(S, T, r, sigma, dte_days, call_df, put_df, combined_df)
+        analysis_summary = self._generate_summary(S_adjusted, T, r, sigma, dte_days, call_df, put_df, combined_df)
+        if adjustment_info:
+            analysis_summary['price_adjustment'] = adjustment_info
         
         # Return in requested format
         if output_format == 'json':
@@ -166,6 +340,20 @@ class OptionsAnalyzer:
             
             # Calculate moneyness
             moneyness = S / K if option_type == 'call' else K / S
+            
+            # Calculate mark vs theoretical pricing
+            use_mark = self.config.get('mark_vs_theoretical', 'theoretical') == 'mark'
+            if use_mark:
+                mark_info = self.calculate_mark_price(bs['price'], S, K, option_type)
+                display_price = mark_info['mark_price']
+                bid_price = mark_info['bid']
+                ask_price = mark_info['ask']
+                spread = mark_info['spread']
+            else:
+                display_price = bs['price']
+                bid_price = None
+                ask_price = None
+                spread = None
             
             # Calculate multiple move scenarios
             move_scenarios = {}
@@ -189,20 +377,31 @@ class OptionsAnalyzer:
                 'underlying': self.underlying,
                 'strike': K,
                 'type': option_type.upper(),
-                'premium': round(bs['price'], 2),
+                'premium': round(display_price, 2),
+                'theoretical_price': round(bs['price'], 2),
                 'moneyness': round(moneyness, 4),
                 'delta': round(bs['delta'], 4),
                 'gamma': round(bs['gamma'], 6),
-                'theta': round(bs['theta'], 3),
-                'vega': round(bs['vega'], 3),
-                'rho': round(bs['rho'], 3),
+                'theta': round(bs['theta'], 6),
+                'vega': round(bs['vega'], 4),
+                'rho': round(bs['rho'], 4),
                 'breakeven': round(prob_data['breakeven'], 2),
                 'prob_profit': round(prob_data['prob_profit'], 3),
                 'prob_itm': round(prob_data['prob_itm'], 3),
-                'max_loss': round(bs['price'], 2),
+                'max_loss': round(display_price, 2),
                 'day_trade_score': round(day_trade_score, 4),
+                'greeks_scaling': self.greeks_scaling,
                 **{k: round(v, 3) for k, v in move_scenarios.items()}
             }
+            
+            # Add mark price info if using mark pricing
+            if use_mark:
+                row.update({
+                    'bid': round(bid_price, 2),
+                    'ask': round(ask_price, 2),
+                    'spread': round(spread, 2),
+                    'spread_pct': round((spread / display_price) * 100, 1) if display_price > 0 else 0
+                })
             
             rows.append(row)
         
@@ -377,6 +576,14 @@ def main():
     parser.add_argument('--rate', type=float, default=0.044, help='Risk-free rate')
     parser.add_argument('--expected-moves', type=str, 
                        help='Expected moves as JSON string, e.g. \'{"target": 2.0, "conservative": 1.0}\'')
+    parser.add_argument('--price-adjustment', type=float, default=0.0,
+                       help='Price adjustment for scenario modeling (e.g. +2.0 for bullish, -1.5 for bearish)')
+    parser.add_argument('--greeks-scaling', choices=['daily', 'per_minute', 'annual'], default='daily',
+                       help='Greeks scaling: daily (default), per_minute (like Excel), or annual')
+    parser.add_argument('--pricing-mode', choices=['theoretical', 'mark'], default='theoretical',
+                       help='Use theoretical Black-Scholes or estimated mark prices')
+    parser.add_argument('--iv-calc', type=str,
+                       help='Calculate IV from market price: "strike,price,type" e.g. "605,3.35,call"')
     parser.add_argument('--output-format', choices=['dataframe', 'json', 'trading_bot', 'backtester'], 
                        default='dataframe', help='Output format')
     parser.add_argument('--save', action='store_true', help='Save results to file')
@@ -386,10 +593,17 @@ def main():
     # Initialize analyzer
     analyzer = OptionsAnalyzer(args.underlying)
     
+    # Set Greeks scaling
+    analyzer.set_greeks_scaling(args.greeks_scaling)
+    
     # Update configuration
     config_updates = {}
     if args.current_price:
         config_updates['current_price'] = args.current_price
+    if args.price_adjustment != 0.0:
+        config_updates['price_adjustment'] = args.price_adjustment
+    if args.pricing_mode:
+        config_updates['mark_vs_theoretical'] = args.pricing_mode
     
     # Parse custom expected moves if provided
     if args.expected_moves:
@@ -409,12 +623,52 @@ def main():
     r = args.rate
     sigma = args.iv
     
+    # Handle IV calculation if requested
+    if args.iv_calc:
+        try:
+            parts = args.iv_calc.split(',')
+            if len(parts) != 3:
+                raise ValueError("IV calc format: strike,price,type")
+            
+            iv_strike = float(parts[0])
+            iv_market_price = float(parts[1])
+            iv_type = parts[2].lower()
+            
+            print(f"\n=== IMPLIED VOLATILITY CALCULATION ===")
+            iv_result = analyzer.implied_volatility_calculator(
+                iv_market_price, S, iv_strike, T, r, iv_type
+            )
+            
+            if iv_result.get('implied_volatility'):
+                print(f"Market Price: ${iv_result['market_price']:.2f}")
+                print(f"Strike: ${iv_strike:.0f} {iv_type.upper()}")
+                print(f"Implied Volatility: {iv_result['implied_volatility']:.1%}")
+                print(f"Theoretical Price: ${iv_result['theoretical_price']:.2f}")
+                print(f"Price Difference: ${iv_result['price_difference']:.2f}")
+                print(f"IV Range: {iv_result['iv_low']:.1%} - {iv_result['iv_high']:.1%}")
+                print(f"Price Range: ${iv_result['price_at_iv_low']:.2f} - ${iv_result['price_at_iv_high']:.2f}")
+            else:
+                print(f"Error calculating IV: {iv_result.get('error', 'Unknown error')}")
+                if 'possible_issues' in iv_result:
+                    for issue in iv_result['possible_issues']:
+                        print(f"  - {issue}")
+            print()
+            
+        except (ValueError, IndexError) as e:
+            print(f"Error parsing IV calculation: {e}")
+            print("Format: --iv-calc 'strike,price,type' e.g. --iv-calc '605,3.35,call'")
+            return
+    
     print(f"\n{args.underlying} Options Analysis")
     print("=" * 60)
     print(f"Current {args.underlying} Price: ${S:.2f}")
+    if args.price_adjustment != 0.0:
+        print(f"Price Adjustment: {args.price_adjustment:+.2f}")
     print(f"Days to Expiration: {args.dte}")
     print(f"Implied Volatility: {sigma:.1%}")
     print(f"Expected Moves: {analyzer.config['expected_moves']}")
+    print(f"Greeks Scaling: {args.greeks_scaling}")
+    print(f"Pricing Mode: {args.pricing_mode}")
     print(f"Output Format: {args.output_format}")
     
     # Run analysis
