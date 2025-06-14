@@ -7,7 +7,9 @@ A comprehensive and flexible options analysis tool for SPY and SPX options, with
 This system helps identify optimal options contracts for any trading strategy with customizable movement expectations. It works **100% locally** with optional external integrations:
 
 ### 🏠 **Core Local Features:**
+- **Professional Web Interface** with Bootstrap 5 UI and real-time data
 - **Advanced Black-Scholes pricing** with complete Greeks calculation
+- **Enhanced Price Scenarios** with options impact analysis
 - **Probability analysis** (profit probability, ITM probability, breakeven)
 - **Multi-scenario R/R analysis** for different move expectations
 - **Flexible scoring algorithm** for optimal contract selection
@@ -26,10 +28,18 @@ optionscalculator/
 │   ├── *.csv                         # Analysis CSV files (auto-generated)
 │   ├── *.json                        # Analysis JSON files (auto-generated)
 │   └── backtest_*.json               # Backtest results (auto-generated)
+├── 📁 templates/                      # Web application templates
+│   └── index.html                    # Main dashboard HTML
+├── 📁 static/                         # Web application assets
+│   ├── css/style.css                 # Custom styling
+│   └── js/app.js                     # Frontend JavaScript
 ├── 📄 .gitignore                     # Protects sensitive data
 ├── 📄 README.md                      # This documentation
+├── 📄 FRONTEND_README.md              # Web application documentation
 ├── 📄 requirements.txt               # Python dependencies
 ├── 📄 IBKR_MIGRATION_GUIDE.md        # Guide for updating IBKR APIs
+├── 🐍 app.py                         # Flask web application
+├── 🐍 run_webapp.py                  # Web application launcher
 ├── 🐍 option_scenario_calculator.py  # Core analysis engine
 ├── 🐍 standalone_example.py          # Standalone local usage example
 ├── 🐍 polygon_backtester_integration.py  # Polygon.io backtesting (optional)
@@ -39,7 +49,16 @@ optionscalculator/
 
 ## 🚀 **Quick Start**
 
-### Standalone Local Analysis (No APIs Required)
+### 🌐 **Web Application (Recommended)**
+```bash
+# Start the beautiful web interface
+python run_webapp.py
+
+# Open browser to: http://localhost:5001
+# Features: Live prices, enhanced analysis, professional UI
+```
+
+### 📱 **Command Line Analysis**
 ```bash
 # Basic SPY analysis with all calculations done locally
 python option_scenario_calculator.py --current-price 605.0 --dte 7 --iv 0.15
