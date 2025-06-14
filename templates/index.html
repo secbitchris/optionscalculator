@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Options Analysis Dashboard</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <link href="{{ url_for('static', filename='css/style.css') }}" rel="stylesheet">
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+        <div class="container">
+            <a class="navbar-brand" href="#"><i class="fas fa-chart-line me-2"></i>Options Analysis Dashboard</a>
+            <div class="navbar-nav ms-auto">
+                <span class="navbar-text" id="api-status"><i class="fas fa-circle text-secondary me-1"></i>Checking API...</span>
+            </div>
+        </div>
+    </nav>
+    <div class="container-fluid mt-4">
+        <div class="row">
+            <div class="col-md-3">
+                <div class="card">
+                    <div class="card-header"><h5><i class="fas fa-cog me-2"></i>Analysis Parameters</h5></div>
+                    <div class="card-body">
+                        <form id="analysis-form">
+                            <div class="mb-3">
+                                <label for="underlying" class="form-label">Underlying</label>
+                                <select class="form-select" id="underlying" name="underlying">
+                                    <option value="SPY" selected>SPY</option>
+                                    <option value="SPX">SPX</option>
+                                </select>
+                            </div>
+                            <div class="mb-3">
+                                <label for="current_price" class="form-label">Current Price</label>
+                                <div class="input-group">
+                                    <span class="input-group-text">$</span>
+                                    <input type="number" class="form-control" id="current_price" name="current_price" step="0.01" placeholder="Auto-fetch">
+                                    <button class="btn btn-outline-secondary" type="button" id="fetch-price"><i class="fas fa-sync-alt"></i></button>
+                                </div>
+                                <div class="form-text">Leave empty to auto-fetch live price</div>
+                            </div>
+                            <div class="mb-3">
+                                <label for="dte" class="form-label">Days to Expiration</label>
+                                <input type="number" class="form-control" id="dte" name="dte" value="7" min="1" max="365">
+                            </div>
+                            <div class="mb-3">
+                                <label for="iv" class="form-label">Implied Volatility</label>
+                                <div class="input-group">
+                                    <input type="number" class="form-control" id="iv" name="iv" value="15" step="0.1" min="1" max="200">
+                                    <span class="input-group-text">%</span>
+                                </div>
+                            </div>
+                            <div class="mb-3">
+                                <label for="risk_free_rate" class="form-label">Risk-Free Rate</label>
+                                <div class="input-group">
+                                    <input type="number" class="form-control" id="risk_free_rate" name="risk_free_rate" value="4.4" step="0.1" min="0" max="20">
+                                    <span class="input-group-text">%</span>
+                                </div>
+                            </div>
+                            <button type="submit" class="btn btn-primary w-100" id="analyze-btn"><i class="fas fa-calculator me-2"></i>Analyze Options</button>
+                        </form>
+                    </div>
+                </div>
+                <!-- IV Calculator -->
+                <div class="card mt-3">
+                    <div class="card-header">
+                        <h6 class="mb-0">
+                            <button class="btn btn-link text-decoration-none p-0 w-100 text-start" type="button" data-bs-toggle="collapse" data-bs-target="#iv-calculator" aria-expanded="false">
+                                <i class="fas fa-calculator me-2"></i>IV Calculator
+                                <i class="fas fa-chevron-down float-end mt-1"></i>
+                            </button>
+                        </h6>
+                    </div>
+                    <div id="iv-calculator" class="collapse">
+                        <div class="card-body">
+                            <form id="iv-form">
+                                <div class="row">
+                                    <div class="col-6">
+                                        <div class="mb-2">
+                                            <label class="form-label small">Market Price</label>
+                                            <div class="input-group input-group-sm">
+                                                <span class="input-group-text">$</span>
+                                                <input type="number" class="form-control" id="iv-market-price" step="0.01" placeholder="2.50">
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="col-6">
+                                        <div class="mb-2">
+                                            <label class="form-label small">Strike</label>
+                                            <div class="input-group input-group-sm">
+                                                <span class="input-group-text">$</span>
+                                                <input type="number" class="form-control" id="iv-strike" step="0.01" placeholder="600">
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="row">
+                                    <div class="col-6">
+                                        <div class="mb-2">
+                                            <label class="form-label small">Option Type</label>
+                                            <select class="form-select form-select-sm" id="iv-option-type">
+                                                <option value="call">Call</option>
+                                                <option value="put">Put</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                    <div class="col-6">
+                                        <div class="mb-2">
+                                            <label class="form-label small">DTE</label>
+                                            <input type="number" class="form-control form-control-sm" id="iv-dte" value="7" min="1">
+                                        </div>
+                                    </div>
+                                </div>
+                                <button type="submit" class="btn btn-info btn-sm w-100">Calculate IV</button>
+                            </form>
+                            <div id="iv-results" class="mt-2 d-none">
+                                <div class="alert alert-success alert-sm p-2">
+                                    <small><strong>Implied Volatility:</strong> <span id="iv-result-value">-</span></small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Price Scenarios -->
+                <div class="card mt-3">
+                    <div class="card-header">
+                        <h6 class="mb-0">
+                            <button class="btn btn-link text-decoration-none p-0 w-100 text-start" type="button" data-bs-toggle="collapse" data-bs-target="#price-scenarios" aria-expanded="false">
+                                <i class="fas fa-chart-area me-2"></i>Price Scenarios
+                                <i class="fas fa-chevron-down float-end mt-1"></i>
+                            </button>
+                        </h6>
+                    </div>
+                    <div id="price-scenarios" class="collapse">
+                        <div class="card-body">
+                            <form id="scenario-form">
+                                <div class="row">
+                                    <div class="col-6">
+                                        <div class="mb-2">
+                                            <label class="form-label small">Base Price</label>
+                                            <div class="input-group input-group-sm">
+                                                <span class="input-group-text">$</span>
+                                                <input type="number" class="form-control" id="scenario-base-price" step="0.01" placeholder="Auto-fill">
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="col-6">
+                                        <div class="mb-2">
+                                            <label class="form-label small">Price Move</label>
+                                            <div class="input-group input-group-sm">
+                                                <input type="number" class="form-control" id="scenario-adjustment" step="0.1" placeholder="+1.50">
+                                                <span class="input-group-text">$</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <button type="submit" class="btn btn-success btn-sm w-100">Analyze Scenario</button>
+                            </form>
+                            <div id="scenario-results" class="mt-2 d-none">
+                                <div class="alert alert-info alert-sm p-2">
+                                    <small id="scenario-results-content">-</small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Greeks Comparison -->
+                <div class="card mt-3">
+                    <div class="card-header">
+                        <h6 class="mb-0">
+                            <button class="btn btn-link text-decoration-none p-0 w-100 text-start" type="button" data-bs-toggle="collapse" data-bs-target="#greeks-comparison" aria-expanded="false">
+                                <i class="fas fa-greek me-2"></i>Greeks Comparison
+                                <i class="fas fa-chevron-down float-end mt-1"></i>
+                            </button>
+                        </h6>
+                    </div>
+                    <div id="greeks-comparison" class="collapse">
+                        <div class="card-body">
+                            <form id="greeks-form">
+                                <div class="row">
+                                    <div class="col-6">
+                                        <div class="mb-2">
+                                            <label class="form-label small">Strike</label>
+                                            <div class="input-group input-group-sm">
+                                                <span class="input-group-text">$</span>
+                                                <input type="number" class="form-control" id="greeks-strike" step="0.01" placeholder="600">
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="col-6">
+                                        <div class="mb-2">
+                                            <label class="form-label small">Option Type</label>
+                                            <select class="form-select form-select-sm" id="greeks-option-type">
+                                                <option value="call">Call</option>
+                                                <option value="put">Put</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                </div>
+                                <button type="submit" class="btn btn-warning btn-sm w-100">Compare Greeks</button>
+                            </form>
+                            <div id="greeks-results" class="mt-2 d-none">
+                                <div class="table-responsive">
+                                    <table class="table table-sm table-striped">
+                                        <thead>
+                                            <tr><th>Scale</th><th>Delta</th><th>Gamma</th><th>Theta</th><th>Vega</th></tr>
+                                        </thead>
+                                        <tbody id="greeks-results-tbody"></tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Saved Files -->
+                <div class="card mt-3">
+                    <div class="card-header">
+                        <h6 class="mb-0">
+                            <button class="btn btn-link text-decoration-none p-0 w-100 text-start" type="button" data-bs-toggle="collapse" data-bs-target="#saved-files" aria-expanded="false">
+                                <i class="fas fa-folder me-2"></i>Saved Files
+                                <i class="fas fa-chevron-down float-end mt-1"></i>
+                            </button>
+                        </h6>
+                    </div>
+                    <div id="saved-files" class="collapse">
+                        <div class="card-body">
+                            <button class="btn btn-secondary btn-sm w-100 mb-2" onclick="loadSavedFiles()">
+                                <i class="fas fa-refresh me-1"></i>Refresh Files
+                            </button>
+                            <div id="files-list">
+                                <small class="text-muted">Click refresh to load saved files</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-9">
+                <div class="card">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <h5><i class="fas fa-table me-2"></i>Analysis Results</h5>
+                        <div>
+                            <button class="btn btn-success btn-sm" id="save-btn" disabled><i class="fas fa-save me-1"></i> Save Results</button>
+                            <button class="btn btn-info btn-sm" id="export-btn" disabled><i class="fas fa-download me-1"></i> Export CSV</button>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <div id="loading" class="text-center d-none">
+                            <div class="spinner-border text-primary" role="status"><span class="visually-hidden">Loading...</span></div>
+                            <p class="mt-2">Analyzing options...</p>
+                        </div>
+                        <div id="results-container" class="d-none">
+                            <div class="table-responsive">
+                                <table class="table table-striped table-hover" id="results-table">
+                                    <thead class="table-dark">
+                                        <tr><th>Type</th><th>Strike</th><th>Premium</th><th>Delta</th><th>Gamma</th><th>Theta</th><th>Vega</th><th>Score</th><th>R/R Ratio</th><th>Prob ITM</th></tr>
+                                    </thead>
+                                    <tbody id="results-tbody"></tbody>
+                                </table>
+                            </div>
+                        </div>
+                        <div id="welcome-message" class="text-center">
+                            <i class="fas fa-chart-line fa-3x text-muted mb-3"></i>
+                            <h4>Welcome to Options Analysis Dashboard</h4>
+                            <p class="text-muted">Configure your parameters and click "Analyze Options" to get started.</p>
+                        </div>
+                    </div>
+                </div>
+                <div id="summary-cards" class="row mt-3 d-none">
+                    <div class="col-md-3"><div class="card bg-primary text-white"><div class="card-body"><h6>Total Options</h6><h4 id="total-options">-</h4></div></div></div>
+                    <div class="col-md-3"><div class="card bg-success text-white"><div class="card-body"><h6>Best Call Score</h6><h4 id="best-call-score">-</h4></div></div></div>
+                    <div class="col-md-3"><div class="card bg-info text-white"><div class="card-body"><h6>Best Put Score</h6><h4 id="best-put-score">-</h4></div></div></div>
+                    <div class="col-md-3"><div class="card bg-warning text-white"><div class="card-body"><h6>Analysis Time</h6><h4 id="analysis-time">-</h4></div></div></div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+</body>
+</html>
