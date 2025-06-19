@@ -290,6 +290,15 @@ class OptionsAnalysisDashboard {
             else if (row.day_trade_score >= 0.2) scoreClass = 'score-good';
             else scoreClass = 'score-poor';
             
+            // Format OI and Volume with badges
+            const oiBadge = row.oi_source === 'REAL' ? 
+                `<span class="badge bg-success" title="Real data from Polygon.io">${row.open_interest.toLocaleString()}</span>` :
+                `<span class="badge bg-warning" title="Estimated">${row.open_interest.toLocaleString()}</span>`;
+            
+            const volBadge = row.volume_source === 'REAL' ? 
+                `<span class="badge bg-success" title="Real volume data">${row.volume.toLocaleString()}</span>` :
+                `<span class="badge bg-secondary" title="Estimated from OI">${row.volume.toLocaleString()}</span>`;
+
             tr.innerHTML = `
                 <td><span class="badge ${row.type === 'CALL' ? 'bg-success' : 'bg-info'}">${row.type}</span></td>
                 <td>$${row.strike.toFixed(0)}</td>
@@ -298,6 +307,8 @@ class OptionsAnalysisDashboard {
                 <td>${row.gamma.toFixed(6)}</td>
                 <td>${row.theta.toFixed(6)}</td>
                 <td>${row.vega.toFixed(4)}</td>
+                <td>${oiBadge}</td>
+                <td>${volBadge}</td>
                 <td class="${scoreClass}">${row.day_trade_score.toFixed(3)}</td>
                 <td>${row.aggressive_rr.toFixed(3)}</td>
                 <td>${(row.prob_itm * 100).toFixed(1)}%</td>
@@ -389,7 +400,7 @@ class OptionsAnalysisDashboard {
         if (!this.currentResults) return;
         
         // Convert results to CSV
-        const headers = ['Type', 'Strike', 'Premium', 'Delta', 'Gamma', 'Theta', 'Vega', 'Score', 'R/R Ratio', 'Prob ITM'];
+        const headers = ['Type', 'Strike', 'Premium', 'Delta', 'Gamma', 'Theta', 'Vega', 'Open Interest', 'Volume', 'OI Source', 'Vol Source', 'Score', 'R/R Ratio', 'Prob ITM'];
         const csvContent = [
             headers.join(','),
             ...this.currentResults.map(row => [
@@ -400,6 +411,10 @@ class OptionsAnalysisDashboard {
                 row.gamma,
                 row.theta,
                 row.vega,
+                row.open_interest || 0,
+                row.volume || 0,
+                row.oi_source || 'N/A',
+                row.volume_source || 'N/A',
                 row.day_trade_score,
                 row.risk_reward_ratio,
                 row.prob_itm

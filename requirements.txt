@@ -44,8 +44,8 @@ six>=1.16.0      # Python 2/3 compatibility utilities
 # For Polygon.io backtesting integration
 # Uncomment to enable historical data backtesting
 # -----------------------------------------------------------------------------
-# polygon-api-client>=1.0.0
-# requests>=2.25.0
+polygon-api-client>=1.0.0
+# requests>=2.25.0  # Already included above
 
 # -----------------------------------------------------------------------------  
 # For IBKR TWS API live trading

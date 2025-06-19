@@ -373,6 +373,32 @@ class OptionsAnalyzer:
             # Calculate day trading score
             day_trade_score = self._calculate_day_trade_score(bs, move_scenarios, prob_data, expected_moves)
             
+            # Get REAL liquidity metrics (OI + estimated volume)
+            try:
+                from polygon_options_hybrid import PolygonOptionsHybrid
+                hybrid = PolygonOptionsHybrid()
+                # Use the NEW method that gets real OI data
+                liquidity_data = hybrid.get_liquidity_metrics(S, K, int(T * 252), option_type, self.underlying)
+                spread_data = hybrid.estimate_bid_ask_spread(display_price, liquidity_data['liquidity_score'])
+            except Exception as e:
+                print(f"⚠️  Could not get liquidity metrics: {e}")
+                # Fallback if hybrid system unavailable
+                liquidity_data = {
+                    'open_interest': 0,
+                    'volume': 0,
+                    'liquidity_score': 0.5,
+                    'oi_source': 'UNAVAILABLE',
+                    'volume_source': 'UNAVAILABLE',
+                    'confidence': 'LOW',
+                    'liquidity_tier': 'UNKNOWN'
+                }
+                spread_data = {
+                    'bid': round(display_price * 0.97, 2),
+                    'ask': round(display_price * 1.03, 2),
+                    'spread': round(display_price * 0.06, 2),
+                    'spread_pct': 6.0
+                }
+            
             row = {
                 'underlying': self.underlying,
                 'strike': K,
@@ -391,6 +417,18 @@ class OptionsAnalyzer:
                 'max_loss': round(display_price, 2),
                 'day_trade_score': round(day_trade_score, 4),
                 'greeks_scaling': self.greeks_scaling,
+                # Add REAL liquidity metrics
+                'open_interest': liquidity_data['open_interest'],
+                'volume': liquidity_data['volume'],
+                'oi_source': liquidity_data['oi_source'],
+                'volume_source': liquidity_data['volume_source'],
+                'liquidity_confidence': liquidity_data['confidence'],
+                'liquidity_score': liquidity_data['liquidity_score'],
+                'liquidity_tier': liquidity_data['liquidity_tier'],
+                'bid': spread_data['bid'],
+                'ask': spread_data['ask'],
+                'spread': spread_data['spread'],
+                'spread_pct': spread_data['spread_pct'],
                 **{k: round(v, 3) for k, v in move_scenarios.items()}
             }
             
