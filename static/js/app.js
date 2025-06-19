@@ -27,6 +27,11 @@ class OptionsAnalysisDashboard {
             this.fetchLivePrice();
         });
         
+        // Detect market IV button
+        document.getElementById('detect-iv-btn').addEventListener('click', () => {
+            this.detectMarketIV();
+        });
+        
         // Save and export buttons
         document.getElementById('save-btn').addEventListener('click', () => {
             this.saveResults();
@@ -115,6 +120,9 @@ class OptionsAnalysisDashboard {
                 // Auto-fill scenario base price
                 this.updateScenarioBasePrice(data.price.toFixed(2));
                 
+                // Auto-detect market IV
+                await this.fetchMarketIV(underlying, data.price);
+                
                 // Update API status
                 const statusElement = document.getElementById('api-status');
                 if (data.source === 'live') {
@@ -131,6 +139,95 @@ class OptionsAnalysisDashboard {
         } finally {
             // Reset button
             button.innerHTML = '<i class="fas fa-sync-alt"></i>';
+            button.disabled = false;
+        }
+    }
+
+    async fetchMarketIV(underlying, currentPrice) {
+        try {
+            const response = await fetch('/api/expected-moves-hybrid', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    underlying: underlying,
+                    current_price: currentPrice,
+                    dte: 7,
+                    iv: 0 // Pass 0 to trigger auto-detection
+                })
+            });
+            
+            const data = await response.json();
+            
+            if (data.success && data.iv_source !== 'User Input') {
+                // Update IV field with detected market IV
+                const ivInput = document.getElementById('iv');
+                ivInput.value = data.iv_used.toFixed(1);
+                
+                // Show IV source info
+                this.showIVSource(data.iv_source, data.iv_used);
+                
+                // Auto-run analysis with market IV
+                setTimeout(() => {
+                    this.runAnalysis();
+                }, 500);
+            }
+        } catch (error) {
+            console.error('Error fetching market IV:', error);
+        }
+    }
+
+    showIVSource(source, iv) {
+        const ivSourceElement = document.getElementById('iv-source');
+        if (ivSourceElement) {
+            ivSourceElement.innerHTML = `<i class="fas fa-info-circle text-info"></i> IV: ${iv.toFixed(1)}% from ${source}`;
+        }
+    }
+
+    async detectMarketIV() {
+        const underlying = document.getElementById('underlying').value;
+        const currentPrice = parseFloat(document.getElementById('current_price').value) || 0;
+        const button = document.getElementById('detect-iv-btn');
+        
+        // Show loading state
+        button.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+        button.disabled = true;
+        
+        try {
+            const response = await fetch('/api/expected-moves-hybrid', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    underlying: underlying,
+                    current_price: currentPrice,
+                    dte: 7,
+                    iv: 0 // Pass 0 to trigger auto-detection
+                })
+            });
+            
+            const data = await response.json();
+            
+            if (data.iv_source !== 'User Input') {
+                // Update IV field with detected market IV
+                const ivInput = document.getElementById('iv');
+                ivInput.value = data.iv_used.toFixed(1);
+                
+                // Show IV source info
+                this.showIVSource(data.iv_source, data.iv_used);
+                
+                this.showAlert(`Market IV detected: ${data.iv_used.toFixed(1)}% from ${data.iv_source}`, 'success');
+            } else {
+                this.showAlert('Could not detect market IV - using fallback', 'warning');
+            }
+        } catch (error) {
+            console.error('Error detecting market IV:', error);
+            this.showAlert('Error detecting market IV', 'danger');
+        } finally {
+            // Reset button
+            button.innerHTML = '<i class="fas fa-eye"></i>';
             button.disabled = false;
         }
     }

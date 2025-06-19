@@ -234,6 +234,205 @@ class LiveDemoSession:
         
         return final_results, final_summary
 
+    def get_live_options_chain(self, symbol, expiration_date=None, dte=7):
+        """
+        Get live options chain using hybrid approach (works around subscription limits)
+        
+        Parameters:
+        symbol: Underlying symbol (SPY, SPX)
+        expiration_date: Specific expiration date (YYYY-MM-DD) or None for auto
+        dte: Days to expiration if expiration_date is None
+        
+        Returns:
+        dict with options chain data
+        """
+        print(f"🔄 Getting options chain for {symbol} using hybrid system...")
+        
+        try:
+            # Use hybrid system to get around subscription limitations
+            from polygon_options_hybrid import PolygonOptionsHybrid
+            hybrid = PolygonOptionsHybrid()
+            
+            # Get enhanced options chain with theoretical pricing (auto-detect market IV)
+            chain_data = hybrid.get_enhanced_options_chain(symbol, dte)
+            
+            if not chain_data or not chain_data.get('contracts'):
+                print("❌ No options data from hybrid system")
+                return {}
+            
+            # Convert to expected format
+            options_data = {
+                'calls': {},
+                'puts': {},
+                'expiration_date': expiration_date or chain_data.get('expiration', ''),
+                'underlying': symbol,
+                'stock_price': chain_data.get('stock_price'),
+                'dte': dte,
+                'iv_used': chain_data.get('iv_used', 15.0)
+            }
+            
+            # Process contracts into calls/puts
+            for contract in chain_data['contracts']:
+                strike = contract['strike']
+                option_info = {
+                    'ticker': contract['ticker'],
+                    'strike': strike,
+                    'bid': contract['bid'],
+                    'ask': contract['ask'],
+                    'mid': contract['mid'],
+                    'theoretical_price': contract['theoretical_price'],
+                    'spread': contract['ask'] - contract['bid'],
+                    'contract_type': contract['type'],
+                    'delta': contract['delta'],
+                    'gamma': contract['gamma'],
+                    'theta': contract['theta'],
+                    'vega': contract['vega'],
+                    'iv': contract['iv_used']
+                }
+                
+                if contract['type'] == 'call':
+                    options_data['calls'][strike] = option_info
+                else:
+                    options_data['puts'][strike] = option_info
+            
+            print(f"✅ Hybrid system: {len(options_data['calls'])} calls, {len(options_data['puts'])} puts")
+            print(f"   📈 Live price: ${chain_data['stock_price']}")
+            print(f"   🧮 Theoretical pricing with {chain_data['iv_used']}% IV")
+            
+            return options_data
+            
+        except Exception as e:
+            print(f"❌ Error with hybrid options system: {e}")
+            return {}
+
+    def get_live_atm_straddle(self, symbol, current_price=None, dte=7):
+        """
+        Get live ATM straddle price from market data
+        
+        Parameters:
+        symbol: Underlying symbol
+        current_price: Current underlying price (fetched if None)
+        dte: Days to expiration
+        
+        Returns:
+        dict with live straddle information
+        """
+        if current_price is None:
+            current_price = self.get_current_price(symbol)
+        
+        # Get options chain
+        options_data = self.get_live_options_chain(symbol, dte=dte)
+        
+        if not options_data or not options_data['calls'] or not options_data['puts']:
+            print("❌ No options data available")
+            return {}
+        
+        # Find ATM strike (closest to current price)
+        call_strikes = list(options_data['calls'].keys())
+        atm_strike = min(call_strikes, key=lambda x: abs(x - current_price))
+        
+        # Get ATM call and put
+        atm_call = options_data['calls'].get(atm_strike)
+        atm_put = options_data['puts'].get(atm_strike)
+        
+        if not atm_call or not atm_put:
+            print(f"❌ No ATM straddle data for strike ${atm_strike}")
+            return {}
+        
+        # Calculate straddle metrics
+        call_mid = atm_call['mid'] or (atm_call['bid'] + atm_call['ask']) / 2
+        put_mid = atm_put['mid'] or (atm_put['bid'] + atm_put['ask']) / 2
+        
+        straddle_price = call_mid + put_mid
+        straddle_expected_move = straddle_price  # Market's implied expected move
+        
+        return {
+            'underlying': symbol,
+            'current_price': current_price,
+            'atm_strike': atm_strike,
+            'expiration_date': options_data['expiration_date'],
+            'dte': dte,
+            
+            # Call data
+            'call_bid': atm_call['bid'],
+            'call_ask': atm_call['ask'],
+            'call_mid': call_mid,
+            'call_spread': atm_call['spread'],
+            
+            # Put data  
+            'put_bid': atm_put['bid'],
+            'put_ask': atm_put['ask'],
+            'put_mid': put_mid,
+            'put_spread': atm_put['spread'],
+            
+            # Straddle metrics
+            'straddle_price': straddle_price,
+            'straddle_expected_move': straddle_expected_move,
+            'breakeven_upper': atm_strike + straddle_price,
+            'breakeven_lower': atm_strike - straddle_price,
+            'expected_move_percentage': (straddle_expected_move / current_price) * 100,
+            
+            # Additional info
+            'total_spread': atm_call['spread'] + atm_put['spread'],
+            'straddle_cost_as_pct_of_underlying': (straddle_price / current_price) * 100
+        }
+
+    def calculate_live_expected_moves(self, symbol, dte=7):
+        """
+        Calculate expected moves using both live market data and IV formula
+        
+        Returns:
+        dict comparing different calculation methods
+        """
+        # Get current price
+        current_price = self.get_current_price(symbol)
+        
+        # Get estimated IV
+        estimated_iv = self.estimate_iv_from_vix(symbol)
+        
+        # Method 1: Live straddle pricing from market
+        live_straddle = self.get_live_atm_straddle(symbol, current_price, dte)
+        
+        # Method 2: IV formula calculation
+        analyzer = OptionsAnalyzer(symbol)
+        T = dte / 252
+        formula_moves = analyzer.calculate_expected_move(current_price, estimated_iv, T)
+        
+        # Method 3: Theoretical straddle using Black-Scholes
+        theoretical_straddle = analyzer.get_atm_straddle_price(current_price, T, 0.044, estimated_iv)
+        
+        comparison = {
+            'underlying': symbol,
+            'current_price': current_price,
+            'dte': dte,
+            'estimated_iv': estimated_iv,
+            'timestamp': datetime.now().isoformat(),
+            
+            # Live market data
+            'live_straddle_price': live_straddle.get('straddle_price'),
+            'live_expected_move': live_straddle.get('straddle_expected_move'),
+            'live_breakevens': {
+                'upper': live_straddle.get('breakeven_upper'),
+                'lower': live_straddle.get('breakeven_lower')
+            } if live_straddle else None,
+            
+            # Formula-based
+            'formula_1sigma_move': formula_moves['1_sigma'],
+            'formula_2sigma_move': formula_moves['2_sigma'],
+            'formula_percentage': formula_moves['percentage_1sigma'],
+            
+            # Theoretical straddle
+            'theoretical_straddle_price': theoretical_straddle['straddle_price'],
+            'theoretical_expected_move': theoretical_straddle['straddle_expected_move'],
+            
+            # Analysis
+            'market_vs_formula_diff': abs(live_straddle.get('straddle_expected_move', 0) - formula_moves['1_sigma']) if live_straddle else None,
+            'market_vs_theoretical_diff': abs(live_straddle.get('straddle_price', 0) - theoretical_straddle['straddle_price']) if live_straddle else None,
+            'implied_volatility_from_market': None  # Could calculate this from market straddle price
+        }
+        
+        return comparison
+
 def main():
     print("🚀 LIVE OPTIONS ANALYSIS DEMO")
     print("=" * 50)

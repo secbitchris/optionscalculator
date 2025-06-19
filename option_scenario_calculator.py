@@ -566,6 +566,150 @@ class OptionsAnalyzer:
                 json.dump(analysis_data, f, indent=2, default=str)
             return json_filename
 
+    def calculate_expected_move(self, S, sigma, T):
+        """
+        Calculate expected move using standard formula: Price × IV × √(T/252)
+        
+        Parameters:
+        S: Current stock price
+        sigma: Implied volatility (annual)
+        T: Time to expiration (years)
+        
+        Returns:
+        dict with expected move calculations
+        """
+        # Standard 1σ expected move formula
+        expected_move_1sigma = S * sigma * np.sqrt(T)
+        
+        # Calculate different confidence intervals
+        expected_moves = {
+            '1_sigma': expected_move_1sigma,  # ~68% probability
+            '2_sigma': expected_move_1sigma * 2,  # ~95% probability
+            '0_5_sigma': expected_move_1sigma * 0.5,  # ~38% probability
+            'percentage_1sigma': (expected_move_1sigma / S) * 100
+        }
+        
+        return expected_moves
+
+    def get_atm_straddle_price(self, S, T, r, sigma):
+        """
+        Calculate ATM straddle price (call + put at same strike)
+        
+        Parameters:
+        S: Current stock price
+        T: Time to expiration (years) 
+        r: Risk-free rate
+        sigma: Implied volatility
+        
+        Returns:
+        dict with straddle pricing information
+        """
+        # Find ATM strike
+        increment = self.config['strike_increment']
+        atm_strike = round(S / increment) * increment
+        
+        # Calculate call and put prices
+        call_result = self.black_scholes_price(S, atm_strike, T, r, sigma, 'call')
+        put_result = self.black_scholes_price(S, atm_strike, T, r, sigma, 'put')
+        
+        straddle_price = call_result['price'] + put_result['price']
+        
+        # The straddle price approximates the expected move
+        straddle_expected_move = straddle_price
+        
+        return {
+            'atm_strike': atm_strike,
+            'call_price': call_result['price'],
+            'put_price': put_result['price'],
+            'straddle_price': straddle_price,
+            'straddle_expected_move': straddle_expected_move,
+            'breakeven_upper': atm_strike + straddle_price,
+            'breakeven_lower': atm_strike - straddle_price,
+            'call_delta': call_result['delta'],
+            'put_delta': put_result['delta'],
+            'total_vega': call_result['vega'] + put_result['vega'],
+            'total_theta': call_result['theta'] + put_result['theta']
+        }
+
+    def compare_expected_move_methods(self, S, T, r, sigma):
+        """
+        Compare different methods of calculating expected moves
+        
+        Returns:
+        dict comparing formula vs straddle approaches
+        """
+        # Method 1: Standard IV formula
+        formula_moves = self.calculate_expected_move(S, sigma, T)
+        
+        # Method 2: ATM straddle pricing
+        straddle_info = self.get_atm_straddle_price(S, T, r, sigma)
+        
+        # Method 3: Current hardcoded moves (for comparison)
+        current_moves = self.config['expected_moves']
+        
+        comparison = {
+            'underlying_price': S,
+            'iv_annual': sigma,
+            'time_to_expiration_years': T,
+            'time_to_expiration_days': T * 252,
+            
+            # Formula-based
+            'formula_1sigma_move': formula_moves['1_sigma'],
+            'formula_2sigma_move': formula_moves['2_sigma'],
+            'formula_percentage': formula_moves['percentage_1sigma'],
+            
+            # Straddle-based
+            'atm_strike': straddle_info['atm_strike'],
+            'straddle_price': straddle_info['straddle_price'],
+            'straddle_expected_move': straddle_info['straddle_expected_move'],
+            'straddle_breakevens': {
+                'upper': straddle_info['breakeven_upper'],
+                'lower': straddle_info['breakeven_lower']
+            },
+            
+            # Current hardcoded (for reference)
+            'current_target_move': current_moves.get('target_move', 0),
+            'current_conservative': current_moves.get('conservative', 0),
+            'current_aggressive': current_moves.get('aggressive', 0),
+            
+            # Analysis
+            'formula_vs_straddle_diff': abs(formula_moves['1_sigma'] - straddle_info['straddle_price']),
+            'formula_vs_current_diff': abs(formula_moves['1_sigma'] - current_moves.get('target_move', 0)),
+            'recommendation': 'formula' if abs(formula_moves['1_sigma'] - straddle_info['straddle_price']) < 0.5 else 'investigate'
+        }
+        
+        return comparison
+
+    def update_expected_moves_from_iv(self, S, T, r, sigma, use_formula=True):
+        """
+        Update expected moves configuration using IV-based calculations
+        
+        Parameters:
+        S: Current stock price
+        T: Time to expiration (years)
+        r: Risk-free rate
+        sigma: Implied volatility
+        use_formula: If True, use formula; if False, use straddle pricing
+        """
+        if use_formula:
+            moves = self.calculate_expected_move(S, sigma, T)
+            primary_move = moves['1_sigma']
+        else:
+            straddle_info = self.get_atm_straddle_price(S, T, r, sigma)
+            primary_move = straddle_info['straddle_expected_move']
+        
+        # Update configuration with calculated moves
+        new_expected_moves = {
+            'target_move': round(primary_move, 1),
+            'conservative': round(primary_move * 0.5, 1),
+            'aggressive': round(primary_move * 1.5, 1),
+            'formula_derived': True,
+            'source': 'iv_formula' if use_formula else 'straddle_pricing'
+        }
+        
+        self.update_config(expected_moves=new_expected_moves)
+        return new_expected_moves
+
 def main():
     parser = argparse.ArgumentParser(description='Flexible Options Analysis Calculator')
     parser.add_argument('--underlying', choices=['SPY', 'SPX'], default='SPY', 

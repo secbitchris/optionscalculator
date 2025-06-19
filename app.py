@@ -397,6 +397,230 @@ def download_file(filename):
     except Exception as e:
         return jsonify({'error': str(e)}), 400
 
+@app.route('/api/expected-moves', methods=['POST'])
+def calculate_expected_moves():
+    """Calculate expected moves using different methods"""
+    try:
+        data = request.get_json()
+        
+        underlying = data.get('underlying', 'SPY')
+        current_price = float(data.get('current_price', 0))
+        dte = int(data.get('dte', 7))
+        iv = float(data.get('iv', 15)) / 100  # Convert percentage to decimal
+        risk_free_rate = float(data.get('risk_free_rate', 4.4)) / 100
+        
+        # Get analyzer
+        analyzer = get_analyzer(underlying)
+        
+        # Get actual price if not provided
+        if current_price <= 0:
+            current_price = analyzer.get_current_price()
+        
+        T = dte / 252
+        
+        # Calculate using different methods
+        formula_moves = analyzer.calculate_expected_move(current_price, iv, T)
+        straddle_info = analyzer.get_atm_straddle_price(current_price, T, risk_free_rate, iv)
+        comparison = analyzer.compare_expected_move_methods(current_price, T, risk_free_rate, iv)
+        
+        return jsonify({
+            'success': True,
+            'formula_moves': formula_moves,
+            'straddle_info': straddle_info,
+            'comparison': comparison,
+            'timestamp': datetime.now().isoformat()
+        })
+        
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 400
+
+@app.route('/api/live-straddle/<symbol>')
+def get_live_straddle(symbol):
+    """Get live straddle pricing from Polygon.io"""
+    try:
+        dte = int(request.args.get('dte', 7))
+        
+        # Initialize live demo session
+        api_key = os.environ.get('POLYGON_API_KEY')
+        if not api_key:
+            return jsonify({
+                'success': False,
+                'error': 'No Polygon.io API key configured'
+            }), 400
+        
+        from live_demo_session import LiveDemoSession
+        demo = LiveDemoSession(api_key)
+        
+        # Get live straddle data
+        straddle_data = demo.get_live_atm_straddle(symbol.upper(), dte=dte)
+        
+        if not straddle_data:
+            return jsonify({
+                'success': False,
+                'error': 'No live straddle data available'
+            }), 400
+        
+        return jsonify({
+            'success': True,
+            'straddle_data': straddle_data,
+            'timestamp': datetime.now().isoformat()
+        })
+        
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 400
+
+@app.route('/api/live-expected-moves/<symbol>')
+def get_live_expected_moves(symbol):
+    """Compare live market expected moves vs formula calculations"""
+    try:
+        dte = int(request.args.get('dte', 7))
+        
+        # Initialize live demo session
+        api_key = os.environ.get('POLYGON_API_KEY')
+        if not api_key:
+            return jsonify({
+                'success': False,
+                'error': 'No Polygon.io API key configured'
+            }), 400
+        
+        from live_demo_session import LiveDemoSession
+        demo = LiveDemoSession(api_key)
+        
+        # Calculate expected moves using multiple methods
+        comparison_data = demo.calculate_live_expected_moves(symbol.upper(), dte=dte)
+        
+        return jsonify({
+            'success': True,
+            'comparison': comparison_data,
+            'timestamp': datetime.now().isoformat()
+        })
+        
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 400
+
+@app.route('/api/auto-update-expected-moves', methods=['POST'])
+def auto_update_expected_moves():
+    """Automatically update expected moves based on IV calculations"""
+    try:
+        data = request.get_json()
+        
+        underlying = data.get('underlying', 'SPY')
+        current_price = float(data.get('current_price', 0))
+        dte = int(data.get('dte', 7))
+        iv = float(data.get('iv', 15)) / 100
+        risk_free_rate = float(data.get('risk_free_rate', 4.4)) / 100
+        use_formula = data.get('use_formula', True)  # True for formula, False for straddle
+        
+        # Get analyzer
+        analyzer = get_analyzer(underlying)
+        
+        # Get actual price if not provided
+        if current_price <= 0:
+            current_price = analyzer.get_current_price()
+        
+        T = dte / 252
+        
+        # Update expected moves based on IV
+        new_moves = analyzer.update_expected_moves_from_iv(
+            current_price, T, risk_free_rate, iv, use_formula
+        )
+        
+        return jsonify({
+            'success': True,
+            'new_expected_moves': new_moves,
+            'method': 'iv_formula' if use_formula else 'straddle_pricing',
+            'underlying': underlying,
+            'current_price': current_price,
+            'timestamp': datetime.now().isoformat()
+        })
+        
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 400
+
+@app.route('/api/expected-moves-hybrid', methods=['POST'])
+def calculate_expected_moves_hybrid():
+    """Calculate expected moves using hybrid system (works around subscription limits)"""
+    try:
+        data = request.get_json()
+        
+        underlying = data.get('underlying', 'SPY')
+        current_price = float(data.get('current_price', 0))
+        dte = int(data.get('dte', 7))
+        iv_input = data.get('iv')  # May be None for auto-detect
+        
+        # Use hybrid system for expected moves
+        from polygon_options_hybrid import PolygonOptionsHybrid
+        hybrid = PolygonOptionsHybrid()
+        
+        # Get live stock price if not provided
+        if current_price <= 0:
+            current_price = hybrid.get_live_stock_price(underlying)
+            if not current_price:
+                return jsonify({'error': 'Could not get live stock price'}), 400
+        
+        # Get real market IV or use provided value
+        if iv_input is not None and iv_input > 0:
+            iv = float(iv_input) / 100  # Convert percentage to decimal
+            iv_source = "User Input"
+            print(f"📊 Expected moves request: {underlying}, ${current_price}, {dte} DTE, {iv*100}% IV (user input)")
+        else:
+            iv = hybrid.get_market_iv(underlying)
+            iv_source = "Market Data (VIX/Historical)"
+            print(f"📊 Expected moves request: {underlying}, ${current_price}, {dte} DTE, {iv*100}% IV (market)")
+        
+        if not iv or iv <= 0:
+            return jsonify({'error': 'Could not determine implied volatility'}), 400
+        
+        # Calculate expected moves
+        expected_moves = hybrid.calculate_expected_moves(current_price, iv, [1, 3, 7, 14, 30])
+        
+        # Format for frontend
+        formatted_moves = {}
+        for dte_key, moves in expected_moves.items():
+            formatted_moves[f"{dte_key}_day"] = {
+                'formula_1sigma': round(moves['formula_move_1sigma'], 2),
+                'formula_2sigma': round(moves['formula_move_2sigma'], 2),
+                'straddle_price': round(moves['straddle_price'], 2),
+                'confidence_68_range': [round(moves['confidence_68'][0], 2), round(moves['confidence_68'][1], 2)],
+                'confidence_95_range': [round(moves['confidence_95'][0], 2), round(moves['confidence_95'][1], 2)],
+                'straddle_range': [round(moves['straddle_range'][0], 2), round(moves['straddle_range'][1], 2)],
+                'current_price': round(current_price, 2),
+                'dte': dte_key
+            }
+        
+        response_data = {
+            'underlying': underlying,
+            'current_price': round(current_price, 2),
+            'iv_used': round(iv * 100, 1),
+            'iv_source': iv_source,
+            'expected_moves': formatted_moves,
+            'summary': {
+                'method': 'Hybrid (Formula + Theoretical Straddle)',
+                'source': 'Polygon.io + Black-Scholes',
+                'formula': 'Price × IV × √(T/252)',
+                'iv_source': iv_source
+            }
+        }
+        
+        print(f"✅ Expected moves calculated successfully")
+        return jsonify(response_data)
+        
+    except Exception as e:
+        print(f"❌ Error calculating expected moves: {e}")
+        return jsonify({'error': str(e)}), 500
+
 if __name__ == '__main__':
     # Create data directory if it doesn't exist
     os.makedirs('data', exist_ok=True)
