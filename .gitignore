@@ -231,6 +231,13 @@ tmp/
 temp/
 *.tmp
 
+# Docker
+.docker/
+volumes/
+docker-compose.override.yml
+docker-compose.*.yml
+!docker-compose.yml
+
 # =============================================================================
 # Keep These Example Files (Override ignores)
 # =============================================================================

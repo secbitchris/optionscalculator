@@ -1,0 +1,57 @@
+# Git files
+.git
+.gitignore
+
+# Python cache
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.so
+.pytest_cache
+
+# Virtual environments
+venv/
+env/
+ENV/
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Data files (will be mounted as volume)
+data/*.csv
+data/*.json
+!data/.gitkeep
+
+# Environment files (will be mounted separately)
+.env
+
+# Documentation
+*.md
+!README.md
+
+# Docker files (don't need to copy into container)
+Dockerfile
+docker-compose.yml
+.dockerignore
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+
+# Test files
+test_*.py
+*_test.py
+tests/ 

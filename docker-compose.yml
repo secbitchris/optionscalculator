@@ -1,0 +1,48 @@
+version: '3.8'
+
+services:
+  options-analyzer:
+    build: .
+    container_name: options-analysis-webapp
+    ports:
+      - "5002:5002"
+    environment:
+      - FLASK_ENV=production
+      - POLYGON_API_KEY=${POLYGON_API_KEY:-}
+    volumes:
+      # Mount data directory for persistent analysis results
+      - ./data:/app/data
+      # Mount .env file if it exists
+      - ${PWD}/.env:/app/.env:ro
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5002/api/config"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - options-network
+
+  # Optional: Add a reverse proxy for production deployment
+  # nginx:
+  #   image: nginx:alpine
+  #   container_name: options-nginx
+  #   ports:
+  #     - "80:80"
+  #     - "443:443"
+  #   volumes:
+  #     - ./nginx.conf:/etc/nginx/nginx.conf:ro
+  #     - ./ssl:/etc/nginx/ssl:ro
+  #   depends_on:
+  #     - options-analyzer
+  #   networks:
+  #     - options-network
+
+networks:
+  options-network:
+    driver: bridge
+
+volumes:
+  options-data:
+    driver: local 

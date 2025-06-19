@@ -56,7 +56,17 @@ optionscalculator/
 
 ## 🚀 **Quick Start**
 
-### 🌐 **Web Application (Recommended)**
+### 🐳 **Docker Deployment (Easiest)**
+```bash
+# Quick Docker setup - everything included!
+./docker-deploy.sh build
+./docker-deploy.sh start
+
+# Open browser to: http://localhost:5002
+# Features: Containerized, isolated, easy deployment
+```
+
+### 🌐 **Web Application (Local)**
 ```bash
 # Start the beautiful web interface with real market data
 python run_webapp.py --port 5002
@@ -122,7 +132,20 @@ The `data/` directory is ignored by git to keep your repository clean while pres
 
 ## 🔧 **Installation**
 
-### Quick Setup
+### 🐳 **Docker Installation (Recommended)**
+```bash
+# Clone repository
+git clone git@github.com:secbitchris/optionscalculator.git
+cd optionscalculator
+
+# Quick Docker setup
+./docker-deploy.sh build
+./docker-deploy.sh start
+
+# Access at http://localhost:5002
+```
+
+### 🐍 **Python Installation (Traditional)**
 ```bash
 # Clone repository
 git clone git@github.com:secbitchris/optionscalculator.git
@@ -282,6 +305,53 @@ expected_moves = hybrid.calculate_expected_moves(stock_price, market_iv, [1, 3, 
 - **Traditional Approach**: $99+/month for real-time options data
 - **Our Hybrid System**: $0-$30/month for basic stock + VIX data
 - **Savings**: 70-100% cost reduction while maintaining accuracy
+
+## 🐳 **Docker Deployment**
+
+### 🚀 **Quick Docker Setup**
+```bash
+# Build and start in one command
+./docker-deploy.sh build && ./docker-deploy.sh start
+
+# View application logs
+./docker-deploy.sh logs
+
+# Stop the application
+./docker-deploy.sh stop
+```
+
+### 🛠️ **Docker Management Commands**
+```bash
+./docker-deploy.sh build     # Build Docker image
+./docker-deploy.sh start     # Start application
+./docker-deploy.sh stop      # Stop application  
+./docker-deploy.sh restart   # Restart application
+./docker-deploy.sh logs      # View logs
+./docker-deploy.sh shell     # Access container shell
+./docker-deploy.sh status    # Check container status
+```
+
+### 🔧 **Docker Configuration**
+- **Port**: Application runs on port 5002
+- **Data Persistence**: `./data` directory mounted as volume
+- **Environment**: `.env` file automatically mounted
+- **Health Checks**: Built-in application health monitoring
+- **Security**: Runs as non-root user inside container
+
+### 📁 **Docker Files Structure**
+```
+├── 🐳 Dockerfile              # Container definition
+├── 🐳 docker-compose.yml      # Service orchestration
+├── 🐳 docker-deploy.sh        # Management script
+└── 🐳 .dockerignore           # Build optimization
+```
+
+### 🌐 **Production Deployment**
+For production deployments, uncomment the nginx service in `docker-compose.yml` for:
+- SSL/TLS termination
+- Load balancing
+- Static file serving
+- Security headers
 
 ## 📈 **Polygon.io Backtesting Integration**
 
