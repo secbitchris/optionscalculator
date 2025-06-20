@@ -275,7 +275,7 @@
                         <!-- Filter Controls -->
                         <div id="filter-controls" class="d-none mb-3">
                             <div class="row align-items-center">
-                                <div class="col-md-6">
+                                <div class="col-md-4">
                                     <div class="btn-group" role="group" aria-label="Options filter">
                                         <input type="radio" class="btn-check" name="options-filter" id="filter-all" autocomplete="off" checked>
                                         <label class="btn btn-outline-primary btn-sm" for="filter-all">
@@ -293,7 +293,25 @@
                                         </label>
                                     </div>
                                 </div>
-                                <div class="col-md-6 text-end">
+                                <div class="col-md-4">
+                                    <div class="input-group input-group-sm">
+                                        <span class="input-group-text">
+                                            <i class="fas fa-sort me-1"></i>Sort by
+                                        </span>
+                                        <select class="form-select form-select-sm" id="sort-options">
+                                            <option value="day_trade_score">🏆 Best Overall (Score)</option>
+                                            <option value="premium_asc">💰 Cheapest First</option>
+                                            <option value="premium_desc">💎 Most Expensive</option>
+                                            <option value="delta_desc">🚀 Highest Delta</option>
+                                            <option value="gamma_desc">⚡ Highest Gamma</option>
+                                            <option value="prob_profit">🎯 Best Probability</option>
+                                            <option value="liquidity_score">💧 Best Liquidity</option>
+                                            <option value="open_interest">📊 Highest OI</option>
+                                            <option value="target_rr">💹 Best Risk/Reward</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <div class="col-md-4 text-end">
                                     <small class="text-muted">
                                         <i class="fas fa-info-circle me-1"></i>
                                         <span class="badge bg-success">Real OI</span> 

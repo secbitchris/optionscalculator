@@ -81,6 +81,11 @@ class OptionsAnalysisDashboard {
                 this.switchView(e.target.id);
             });
         });
+        
+        // Sort dropdown
+        document.getElementById('sort-options').addEventListener('change', () => {
+            this.applySorting();
+        });
     }
     
     async checkAPIStatus() {
@@ -439,6 +444,52 @@ class OptionsAnalysisDashboard {
                 document.getElementById('puts-view').classList.remove('d-none');
                 break;
         }
+    }
+    
+    applySorting() {
+        if (!this.currentResults) return;
+        
+        const sortBy = document.getElementById('sort-options').value;
+        let sortedResults = [...this.currentResults];
+        
+        // Apply sorting based on selected option
+        switch(sortBy) {
+            case 'day_trade_score':
+                sortedResults.sort((a, b) => b.day_trade_score - a.day_trade_score);
+                break;
+            case 'premium_asc':
+                sortedResults.sort((a, b) => a.premium - b.premium);
+                break;
+            case 'premium_desc':
+                sortedResults.sort((a, b) => b.premium - a.premium);
+                break;
+            case 'delta_desc':
+                sortedResults.sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta));
+                break;
+            case 'gamma_desc':
+                sortedResults.sort((a, b) => b.gamma - a.gamma);
+                break;
+            case 'prob_profit':
+                sortedResults.sort((a, b) => b.prob_profit - a.prob_profit);
+                break;
+            case 'liquidity_score':
+                sortedResults.sort((a, b) => b.liquidity_score - a.liquidity_score);
+                break;
+            case 'open_interest':
+                sortedResults.sort((a, b) => b.open_interest - a.open_interest);
+                break;
+            case 'target_rr':
+                // Sort by target move risk/reward ratio
+                sortedResults.sort((a, b) => (b.target_move_rr || 0) - (a.target_move_rr || 0));
+                break;
+            default:
+                // Default to day_trade_score
+                sortedResults.sort((a, b) => b.day_trade_score - a.day_trade_score);
+        }
+        
+        // Update current results and refresh display
+        this.currentResults = sortedResults;
+        this.displayResults(sortedResults, this.currentSummary);
     }
     
     // Helper methods for formatting
