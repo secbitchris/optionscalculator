@@ -13,40 +13,16 @@ class OptionsAnalysisDashboard {
         this.bindEvents();
         this.checkAPIStatus();
         this.loadConfig();
+        this.loadExpirationDates();
     }
     
     bindEvents() {
-        // Main analysis form
+        // Form submissions
         document.getElementById('analysis-form').addEventListener('submit', (e) => {
             e.preventDefault();
             this.runAnalysis();
         });
         
-        // Fetch price button
-        document.getElementById('fetch-price').addEventListener('click', () => {
-            this.fetchLivePrice();
-        });
-        
-        // Detect market IV button
-        document.getElementById('detect-iv-btn').addEventListener('click', () => {
-            this.detectMarketIV();
-        });
-        
-        // Save and export buttons
-        document.getElementById('save-btn').addEventListener('click', () => {
-            this.saveResults();
-        });
-        
-        document.getElementById('export-btn').addEventListener('click', () => {
-            this.exportCSV();
-        });
-        
-        // Underlying selection change
-        document.getElementById('underlying').addEventListener('change', () => {
-            this.onUnderlyingChange();
-        });
-        
-        // Enhanced features forms
         document.getElementById('iv-form').addEventListener('submit', (e) => {
             e.preventDefault();
             this.calculateIV();
@@ -62,8 +38,55 @@ class OptionsAnalysisDashboard {
             this.compareGreeks();
         });
         
-        // Auto-fill scenario base price when main analysis is done
-        this.autoFillScenarioPrice();
+        // Button clicks
+        document.getElementById('fetch-price-btn').addEventListener('click', () => {
+            this.fetchLivePrice();
+        });
+        
+        document.getElementById('detect-iv-btn').addEventListener('click', () => {
+            this.detectMarketIV();
+        });
+        
+        document.getElementById('save-btn').addEventListener('click', () => {
+            this.saveResults();
+        });
+        
+        document.getElementById('export-btn').addEventListener('click', () => {
+            this.exportCSV();
+        });
+        
+        document.getElementById('export-json-btn').addEventListener('click', () => {
+            this.exportJSON();
+        });
+        
+        // Underlying symbol change
+        document.getElementById('underlying').addEventListener('change', () => {
+            this.onUnderlyingChange();
+            this.loadExpirationDates();
+        });
+        
+        // Expiration date change
+        document.getElementById('expiration-date').addEventListener('change', () => {
+            this.onExpirationDateChange();
+        });
+        
+        // Auto-fill scenario price when current price changes
+        document.getElementById('current_price').addEventListener('input', () => {
+            this.autoFillScenarioPrice();
+        });
+        
+        // Filter controls
+        document.querySelectorAll('input[name="options-filter"]').forEach(radio => {
+            radio.addEventListener('change', (e) => {
+                this.switchView(e.target.id);
+            });
+        });
+        
+        // Sort dropdown
+        document.getElementById('sort-options').addEventListener('change', (e) => {
+            console.log('Sort dropdown changed to:', e.target.value);
+            this.applySorting();
+        });
     }
     
     async checkAPIStatus() {
@@ -103,7 +126,7 @@ class OptionsAnalysisDashboard {
     
     async fetchLivePrice() {
         const underlying = document.getElementById('underlying').value;
-        const button = document.getElementById('fetch-price');
+        const button = document.getElementById('fetch-price-btn');
         const input = document.getElementById('current_price');
         
         // Show loading state
@@ -278,46 +301,273 @@ class OptionsAnalysisDashboard {
     }
     
     displayResults(results, summary) {
-        const tbody = document.getElementById('results-tbody');
+        // Store current price for ATM detection
+        const currentPrice = parseFloat(document.getElementById('current_price').value);
+        
+        // Separate calls and puts
+        const calls = results.filter(r => r.type === 'CALL').sort((a, b) => a.strike - b.strike);
+        const puts = results.filter(r => r.type === 'PUT').sort((a, b) => a.strike - b.strike);
+        
+        // Store for view switching and sorting
+        this.callsData = calls;
+        this.putsData = puts;
+        this.currentPrice = currentPrice;
+        this.currentResults = results;  // Store original results for sorting
+        this.currentSummary = summary;  // Store summary for re-display
+        
+        // Update current price display
+        document.getElementById('current-spot-price').textContent = `Spot: $${currentPrice.toFixed(2)}`;
+        
+        // Show filter controls
+        document.getElementById('filter-controls').classList.remove('d-none');
+        
+        // Build chain view (default)
+        this.buildChainView(calls, puts, currentPrice);
+        
+        // Build individual views for switching
+        this.buildCallsView(calls);
+        this.buildPutsView(puts);
+        
+        this.showResults();
+    }
+    
+    buildChainView(calls, puts, currentPrice) {
+        const tbody = document.getElementById('chain-tbody');
         tbody.innerHTML = '';
         
-        results.forEach(row => {
+        // Get all unique strikes, sorted
+        const allStrikes = [...new Set([...calls.map(c => c.strike), ...puts.map(p => p.strike)])].sort((a, b) => a - b);
+        
+        allStrikes.forEach(strike => {
+            const call = calls.find(c => c.strike === strike);
+            const put = puts.find(p => p.strike === strike);
+            
+            // Skip strikes that have neither call nor put (shouldn't happen but safety check)
+            if (!call && !put) return;
+            
             const tr = document.createElement('tr');
             
-            // Determine score class
-            let scoreClass = '';
-            if (row.day_trade_score >= 0.4) scoreClass = 'score-excellent';
-            else if (row.day_trade_score >= 0.2) scoreClass = 'score-good';
-            else scoreClass = 'score-poor';
+            // Determine if this is ATM (within $5 of current price)
+            const isATM = Math.abs(strike - currentPrice) <= 5;
+            if (isATM) {
+                tr.classList.add('atm-row');
+            }
             
-            // Format OI and Volume with badges
-            const oiBadge = row.oi_source === 'REAL' ? 
-                `<span class="badge bg-success" title="Real data from Polygon.io">${row.open_interest.toLocaleString()}</span>` :
-                `<span class="badge bg-warning" title="Estimated">${row.open_interest.toLocaleString()}</span>`;
+            // Determine ITM status
+            const callITM = strike < currentPrice;
+            const putITM = strike > currentPrice;
             
-            const volBadge = row.volume_source === 'REAL' ? 
-                `<span class="badge bg-success" title="Real volume data">${row.volume.toLocaleString()}</span>` :
-                `<span class="badge bg-secondary" title="Estimated from OI">${row.volume.toLocaleString()}</span>`;
-
             tr.innerHTML = `
-                <td><span class="badge ${row.type === 'CALL' ? 'bg-success' : 'bg-info'}">${row.type}</span></td>
-                <td>$${row.strike.toFixed(0)}</td>
-                <td>$${row.premium.toFixed(2)}</td>
-                <td>${row.delta.toFixed(3)}</td>
-                <td>${row.gamma.toFixed(6)}</td>
-                <td>${row.theta.toFixed(6)}</td>
-                <td>${row.vega.toFixed(4)}</td>
-                <td>${oiBadge}</td>
-                <td>${volBadge}</td>
-                <td class="${scoreClass}">${row.day_trade_score.toFixed(3)}</td>
-                <td>${row.aggressive_rr.toFixed(3)}</td>
-                <td>${(row.prob_itm * 100).toFixed(1)}%</td>
+                <!-- Call Side -->
+                <td class="${callITM ? 'itm-call' : ''}">${call ? this.formatScore(call.day_trade_score) : '-'}</td>
+                <td class="${callITM ? 'itm-call' : ''}">${call ? this.formatPremium(call.premium) : '-'}</td>
+                <td class="${callITM ? 'itm-call' : ''}">${call ? this.formatDelta(call.delta) : '-'}</td>
+                <td class="${callITM ? 'itm-call' : ''}">${call ? call.gamma.toFixed(6) : '-'}</td>
+                <td class="${callITM ? 'itm-call' : ''}">${call ? this.formatOI(call) : '-'}</td>
+                <td class="${callITM ? 'itm-call' : ''}">${call ? this.formatVolume(call) : '-'}</td>
+                
+                <!-- Strike Column -->
+                <td class="strike-column">$${strike.toFixed(0)}</td>
+                
+                <!-- Put Side -->
+                <td class="${putITM ? 'itm-put' : ''}">${put ? this.formatScore(put.day_trade_score) : '-'}</td>
+                <td class="${putITM ? 'itm-put' : ''}">${put ? this.formatPremium(put.premium) : '-'}</td>
+                <td class="${putITM ? 'itm-put' : ''}">${put ? this.formatDelta(put.delta) : '-'}</td>
+                <td class="${putITM ? 'itm-put' : ''}">${put ? put.gamma.toFixed(6) : '-'}</td>
+                <td class="${putITM ? 'itm-put' : ''}">${put ? this.formatOI(put) : '-'}</td>
+                <td class="${putITM ? 'itm-put' : ''}">${put ? this.formatVolume(put) : '-'}</td>
             `;
             
             tbody.appendChild(tr);
         });
+    }
+    
+    buildCallsView(calls) {
+        const tbody = document.getElementById('calls-tbody');
+        tbody.innerHTML = '';
         
-        this.showResults();
+        calls.forEach(call => {
+            const tr = document.createElement('tr');
+            
+            tr.innerHTML = `
+                <td>$${call.strike.toFixed(0)}</td>
+                <td>${this.formatPremium(call.premium)}</td>
+                <td>${this.formatDelta(call.delta)}</td>
+                <td>${call.gamma.toFixed(6)}</td>
+                <td>${call.theta.toFixed(6)}</td>
+                <td>${call.vega.toFixed(4)}</td>
+                <td>${this.formatOI(call)}</td>
+                <td>${this.formatVolume(call)}</td>
+                <td>${this.formatScore(call.day_trade_score)}</td>
+                <td>${call.aggressive_rr.toFixed(3)}</td>
+                <td>${(call.prob_itm * 100).toFixed(1)}%</td>
+            `;
+            
+            tbody.appendChild(tr);
+        });
+    }
+    
+    buildPutsView(puts) {
+        const tbody = document.getElementById('puts-tbody');
+        tbody.innerHTML = '';
+        
+        puts.forEach(put => {
+            const tr = document.createElement('tr');
+            
+            tr.innerHTML = `
+                <td>$${put.strike.toFixed(0)}</td>
+                <td>${this.formatPremium(put.premium)}</td>
+                <td>${this.formatDelta(put.delta)}</td>
+                <td>${put.gamma.toFixed(6)}</td>
+                <td>${put.theta.toFixed(6)}</td>
+                <td>${put.vega.toFixed(4)}</td>
+                <td>${this.formatOI(put)}</td>
+                <td>${this.formatVolume(put)}</td>
+                <td>${this.formatScore(put.day_trade_score)}</td>
+                <td>${put.aggressive_rr.toFixed(3)}</td>
+                <td>${(put.prob_itm * 100).toFixed(1)}%</td>
+            `;
+            
+            tbody.appendChild(tr);
+        });
+    }
+    
+    switchView(filterId) {
+        // Hide all views
+        document.getElementById('chain-view').classList.add('d-none');
+        document.getElementById('calls-view').classList.add('d-none');
+        document.getElementById('puts-view').classList.add('d-none');
+        
+        // Show selected view
+        switch(filterId) {
+            case 'filter-all':
+                document.getElementById('chain-view').classList.remove('d-none');
+                break;
+            case 'filter-calls':
+                document.getElementById('calls-view').classList.remove('d-none');
+                break;
+            case 'filter-puts':
+                document.getElementById('puts-view').classList.remove('d-none');
+                break;
+        }
+    }
+    
+    applySorting() {
+        if (!this.currentResults) {
+            console.log('No current results to sort');
+            return;
+        }
+        
+        const sortBy = document.getElementById('sort-options').value;
+        console.log('Sorting by:', sortBy);
+        
+        // Get sorting function
+        const getSortFunction = (sortBy) => {
+            switch(sortBy) {
+                case 'day_trade_score':
+                    return (a, b) => b.day_trade_score - a.day_trade_score;
+                case 'premium_asc':
+                    return (a, b) => a.premium - b.premium;
+                case 'premium_desc':
+                    return (a, b) => b.premium - a.premium;
+                case 'delta_desc':
+                    return (a, b) => Math.abs(b.delta) - Math.abs(a.delta);
+                case 'gamma_desc':
+                    return (a, b) => b.gamma - a.gamma;
+                case 'prob_profit':
+                    return (a, b) => (b.prob_itm || 0) - (a.prob_itm || 0);
+                case 'liquidity_score':
+                    return (a, b) => (b.liquidity_score || 0) - (a.liquidity_score || 0);
+                case 'open_interest':
+                    return (a, b) => (b.open_interest || 0) - (a.open_interest || 0);
+                case 'target_rr':
+                    return (a, b) => (b.aggressive_rr || 0) - (a.aggressive_rr || 0);
+                default:
+                    return (a, b) => b.day_trade_score - a.day_trade_score;
+            }
+        };
+        
+        const sortFunction = getSortFunction(sortBy);
+        
+        // Sort the data arrays
+        const originalCallsLength = this.callsData.length;
+        const originalPutsLength = this.putsData.length;
+        
+        this.callsData = [...this.callsData].sort(sortFunction);
+        this.putsData = [...this.putsData].sort(sortFunction);
+        
+        console.log(`Sorted ${originalCallsLength} calls and ${originalPutsLength} puts`);
+        
+        // Rebuild the current view
+        const activeView = document.querySelector('input[name="options-filter"]:checked').id;
+        console.log('Active view:', activeView);
+        
+        switch(activeView) {
+            case 'filter-all':
+                this.buildChainView(this.callsData, this.putsData, this.currentPrice);
+                break;
+            case 'filter-calls':
+                this.buildCallsView(this.callsData);
+                break;
+            case 'filter-puts':
+                this.buildPutsView(this.putsData);
+                break;
+        }
+        
+        console.log('Sorting complete');
+        
+        // Show a brief visual feedback for sorting
+        const sortDropdown = document.getElementById('sort-options');
+        const originalBg = sortDropdown.style.backgroundColor;
+        sortDropdown.style.backgroundColor = '#28a745';
+        sortDropdown.style.color = 'white';
+        setTimeout(() => {
+            sortDropdown.style.backgroundColor = originalBg;
+            sortDropdown.style.color = '';
+        }, 500);
+    }
+    
+    // Helper methods for formatting
+    formatScore(score) {
+        let className = '';
+        if (score >= 0.4) className = 'score-excellent';
+        else if (score >= 0.2) className = 'score-good';
+        else className = 'score-poor';
+        
+        return `<span class="${className}">${score.toFixed(3)}</span>`;
+    }
+    
+    formatPremium(premium) {
+        let className = '';
+        if (premium >= 5) className = 'premium-high';
+        else if (premium >= 1) className = 'premium-medium';
+        else className = 'premium-low';
+        
+        return `<span class="${className}">$${premium.toFixed(2)}</span>`;
+    }
+    
+    formatDelta(delta) {
+        const absDelta = Math.abs(delta);
+        let className = '';
+        if (absDelta >= 0.5) className = 'delta-high';
+        else if (absDelta >= 0.3) className = 'delta-medium';
+        else className = 'delta-low';
+        
+        return `<span class="${className}">${delta.toFixed(3)}</span>`;
+    }
+    
+    formatOI(option) {
+        const badge = option.oi_source === 'REAL' ? 
+            `<span class="badge bg-success" title="Real data from Polygon.io">${option.open_interest.toLocaleString()}</span>` :
+            `<span class="badge bg-warning" title="Estimated">${option.open_interest.toLocaleString()}</span>`;
+        return badge;
+    }
+    
+    formatVolume(option) {
+        const badge = option.volume_source === 'REAL' ? 
+            `<span class="badge bg-success" title="Real volume data">${option.volume.toLocaleString()}</span>` :
+            `<span class="badge bg-secondary" title="Estimated from OI">${option.volume.toLocaleString()}</span>`;
+        return badge;
     }
     
     updateSummaryCards(results) {
@@ -362,6 +612,7 @@ class OptionsAnalysisDashboard {
     enableActionButtons() {
         document.getElementById('save-btn').disabled = false;
         document.getElementById('export-btn').disabled = false;
+        document.getElementById('export-json-btn').disabled = false;
     }
     
     async saveResults() {
@@ -431,9 +682,263 @@ class OptionsAnalysisDashboard {
         window.URL.revokeObjectURL(url);
     }
     
+    exportJSON() {
+        if (!this.currentResults || !this.currentSummary) return;
+        
+        // Create complete JSON export with both summary and full results
+        const exportData = {
+            analysis_metadata: {
+                export_timestamp: new Date().toISOString(),
+                export_source: 'Options Analysis Web App',
+                total_options: this.currentResults.length
+            },
+            summary: this.currentSummary,
+            complete_options_data: this.currentResults,
+            calls: this.currentResults.filter(r => r.type === 'CALL'),
+            puts: this.currentResults.filter(r => r.type === 'PUT')
+        };
+        
+        // Download JSON
+        const jsonString = JSON.stringify(exportData, null, 2);
+        const blob = new Blob([jsonString], { type: 'application/json' });
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `options_analysis_complete_${new Date().toISOString().slice(0, 10)}.json`;
+        a.click();
+        window.URL.revokeObjectURL(url);
+        
+        this.showAlert('Complete JSON data exported successfully!', 'success');
+    }
+    
     onUnderlyingChange() {
         // Clear current price when underlying changes
         document.getElementById('current_price').value = '';
+    }
+    
+    async loadExpirationDates() {
+        const underlying = document.getElementById('underlying').value;
+        const select = document.getElementById('expiration-date');
+        
+        // Show loading
+        select.innerHTML = '<option value="">Loading trading days...</option>';
+        
+        try {
+            const response = await fetch(`/api/expiration-dates/${underlying}`);
+            const data = await response.json();
+            
+            if (data.success) {
+                // Clear existing options
+                select.innerHTML = '';
+                
+                // Add default option
+                const defaultOption = document.createElement('option');
+                defaultOption.value = '';
+                defaultOption.textContent = 'Select any trading day...';
+                select.appendChild(defaultOption);
+                
+                // Group dates by importance for better organization
+                const highPriority = [];
+                const mediumPriority = [];
+                const standardDays = [];
+                
+                data.expiration_dates.forEach(exp => {
+                    if (exp.priority >= 20) {
+                        highPriority.push(exp);
+                    } else if (exp.priority >= 10) {
+                        mediumPriority.push(exp);
+                    } else {
+                        standardDays.push(exp);
+                    }
+                });
+                
+                // Add high priority dates first (OPEX, major events)
+                if (highPriority.length > 0) {
+                    const optgroup = document.createElement('optgroup');
+                    optgroup.label = '📅 Major Events & Options Expirations';
+                    highPriority.forEach(exp => {
+                        optgroup.appendChild(this.createDateOption(exp));
+                    });
+                    select.appendChild(optgroup);
+                }
+                
+                // Add medium priority dates (weekly expirations, economic events)
+                if (mediumPriority.length > 0) {
+                    const optgroup = document.createElement('optgroup');
+                    optgroup.label = '📊 Economic Events & Weekly Expirations';
+                    mediumPriority.forEach(exp => {
+                        optgroup.appendChild(this.createDateOption(exp));
+                    });
+                    select.appendChild(optgroup);
+                }
+                
+                // Add standard trading days
+                if (standardDays.length > 0) {
+                    const optgroup = document.createElement('optgroup');
+                    optgroup.label = '📈 All Trading Days';
+                    standardDays.forEach(exp => {
+                        optgroup.appendChild(this.createDateOption(exp));
+                    });
+                    select.appendChild(optgroup);
+                }
+                
+                // Auto-select the next options expiration (Friday) within 14 days
+                const nextExpiry = data.expiration_dates.find(exp => 
+                    exp.is_options_expiry && exp.dte <= 14
+                );
+                
+                if (nextExpiry) {
+                    select.value = nextExpiry.date;
+                    this.onExpirationDateChange();
+                } else {
+                    // Fallback to first high priority date
+                    if (highPriority.length > 0) {
+                        select.value = highPriority[0].date;
+                        this.onExpirationDateChange();
+                    }
+                }
+                
+            } else {
+                select.innerHTML = '<option value="">Error loading dates</option>';
+                this.showAlert('Error loading trading days: ' + data.error, 'danger');
+            }
+        } catch (error) {
+            console.error('Error loading expiration dates:', error);
+            select.innerHTML = '<option value="">Error loading dates</option>';
+            this.showAlert('Network error loading trading days', 'danger');
+        }
+    }
+    
+    createDateOption(exp) {
+        const option = document.createElement('option');
+        option.value = exp.date;
+        option.dataset.dte = exp.dte;
+        option.dataset.expiryType = exp.expiry_type;
+        option.dataset.economicEvents = JSON.stringify(exp.economic_events);
+        option.dataset.isMonthly = exp.is_monthly;
+        option.dataset.isQuarterly = exp.is_quarterly;
+        option.dataset.isOptionsExpiry = exp.is_options_expiry;
+        option.dataset.priority = exp.priority;
+        option.dataset.weekday = exp.weekday;
+        
+        // Use the pre-formatted display date that includes events
+        option.textContent = exp.display_date;
+        
+        // Add special styling for high priority dates
+        if (exp.priority >= 20) {
+            option.style.fontWeight = 'bold';
+            option.style.color = '#dc3545'; // Bootstrap danger color
+        } else if (exp.priority >= 15) {
+            option.style.fontWeight = 'bold';
+            option.style.color = '#fd7e14'; // Bootstrap warning color
+        } else if (exp.priority >= 10) {
+            option.style.fontWeight = '500';
+            option.style.color = '#0d6efd'; // Bootstrap primary color
+        }
+        
+        return option;
+    }
+    
+    onExpirationDateChange() {
+        const select = document.getElementById('expiration-date');
+        const selectedOption = select.selectedOptions[0];
+        
+        if (selectedOption && selectedOption.value) {
+            const dte = selectedOption.dataset.dte;
+            const expiryType = selectedOption.dataset.expiryType;
+            const economicEvents = JSON.parse(selectedOption.dataset.economicEvents || '[]');
+            const isOptionsExpiry = selectedOption.dataset.isOptionsExpiry === 'true';
+            const weekday = selectedOption.dataset.weekday;
+            const priority = parseInt(selectedOption.dataset.priority || '0');
+            
+            // Update display elements
+            document.getElementById('dte-display').textContent = `${dte} DTE`;
+            
+            // Enhanced expiry type display
+            let expiryDisplay = expiryType;
+            if (isOptionsExpiry) {
+                expiryDisplay += ` 📅`;
+            }
+            if (weekday) {
+                expiryDisplay += ` (${weekday})`;
+            }
+            document.getElementById('expiry-type').textContent = expiryDisplay;
+            
+            // Update economic events display with enhanced styling
+            const eventsElement = document.getElementById('economic-events');
+            if (economicEvents.length > 0) {
+                eventsElement.innerHTML = economicEvents.map(event => {
+                    let badgeClass = 'bg-secondary text-white';
+                    let icon = '';
+                    
+                    // Color code and add icons by importance
+                    switch(event) {
+                        case 'FOMC':
+                            badgeClass = 'bg-danger text-white';
+                            icon = '🏛️ ';
+                            break;
+                        case 'CPI':
+                            badgeClass = 'bg-danger text-white';
+                            icon = '📊 ';
+                            break;
+                        case 'OPEX':
+                            badgeClass = 'bg-warning text-dark';
+                            icon = '⚡ ';
+                            break;
+                        case 'VIXperation':
+                            badgeClass = 'bg-warning text-dark';
+                            icon = '📈 ';
+                            break;
+                        case 'PPI':
+                            badgeClass = 'bg-info text-white';
+                            icon = '🏭 ';
+                            break;
+                        case 'Earnings':
+                            badgeClass = 'bg-success text-white';
+                            icon = '💰 ';
+                            break;
+                        case 'Fed Speech':
+                            badgeClass = 'bg-primary text-white';
+                            icon = '🎤 ';
+                            break;
+                        default:
+                            badgeClass = 'bg-secondary text-white';
+                            icon = '📅 ';
+                    }
+                    
+                    return `<span class="badge ${badgeClass} ms-1" title="${event}">${icon}${event}</span>`;
+                }).join('');
+            } else {
+                eventsElement.innerHTML = '<span class="text-muted">No major events</span>';
+            }
+            
+            // Add priority indicator
+            if (priority >= 20) {
+                eventsElement.innerHTML += ' <span class="badge bg-danger text-white ms-1">🔥 HIGH</span>';
+            } else if (priority >= 15) {
+                eventsElement.innerHTML += ' <span class="badge bg-warning text-dark ms-1">⚠️ MEDIUM</span>';
+            }
+            
+            // Update the form's dte field for backend compatibility
+            const hiddenDTE = document.getElementById('dte') || this.createHiddenDTEField();
+            hiddenDTE.value = dte;
+            
+        } else {
+            // Clear displays
+            document.getElementById('dte-display').textContent = '-';
+            document.getElementById('expiry-type').textContent = '-';
+            document.getElementById('economic-events').innerHTML = '';
+        }
+    }
+    
+    createHiddenDTEField() {
+        // Create hidden DTE field for backend compatibility
+        const hiddenField = document.createElement('input');
+        hiddenField.type = 'hidden';
+        hiddenField.id = 'dte';
+        hiddenField.name = 'dte';
+        document.getElementById('analysis-form').appendChild(hiddenField);
+        return hiddenField;
     }
     
     autoFillScenarioPrice() {

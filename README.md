@@ -75,13 +75,42 @@ python run_webapp.py --port 5002
 # Features: Real market IV detection, live prices, hybrid analysis, professional UI
 ```
 
+### 🎯 **Professional Web Interface Features:**
+- **Complete Trading Day Selection** - Choose any valid trading day (0 DTE, 1 DTE, 2 DTE, etc.)
+- **Comprehensive Economic Calendar** - Accurate 2025 event labeling (CPI, PPI, FOMC, OPEX, NFP, JOLTS)
+- **Smart Date Organization** - Grouped by priority: Major Events → Economic Events → All Trading Days
+- **Options Chain View** - Traditional broker-style layout with calls|strike|puts
+- **Advanced Sorting** - 9 different sorting methods (Best Overall, Cheapest, Highest Delta, etc.)
+  - **💹 Risk/Reward Sorting** - Higher R/R ratios (better leverage potential) shown first
+  - **🔄 View-Aware Sorting** - Works in Chain View, Calls Only, and Puts Only modes
+  - **⚡ Real-Time Sorting** - Instant reordering with visual confirmation
+- **ATM Highlighting** - Yellow background for strikes within $5 of current price
+- **Color-Coded ITM/OTM** - Green for ITM, red for OTM options
+- **Real-Time Data Integration** - Live prices, market IV, and Open Interest
+- **Export Capabilities** - CSV and JSON export with complete options data
+- **Responsive Design** - Works on desktop, tablet, and mobile devices
+
 ### 🔥 **New Real Market Features:**
 1. **Auto-Detect Market IV** - Click the blue eye button (👁️) next to IV field
 2. **Fetch Live Prices** - Real SPY prices from Polygon.io basic API
 3. **Real Expected Moves** - Uses proper formula: Price × IV × √(T/252)
 4. **Market IV Sources** - VIX (20.1%) → VIX9D → Historical → 15% fallback
-5. **No Premium Subscription Needed** - Works with basic Polygon.io API ($0-$30/month)
-6. **Frontend Integration** - Seamless one-click market data detection
+5. **Complete Trading Calendar** - All valid trading days (63 days) with accurate 2025 economic events
+6. **Professional Date Selection** - 0 DTE through 90+ DTE with event indicators
+7. **Advanced Options Sorting** - 9 ranking methods from best overall to specific Greek strategies
+8. **No Premium Subscription Needed** - Works with basic Polygon.io API ($0-$30/month)
+9. **Frontend Integration** - Seamless one-click market data detection
+
+### 📅 **Comprehensive Economic Calendar Integration:**
+- **CPI Dates** - All 2025 Consumer Price Index release dates (2nd Wednesday monthly)
+- **PPI Dates** - Producer Price Index releases (Thursday after CPI)
+- **FOMC Meetings** - Federal Reserve policy meetings with rate decisions
+- **OPEX Dates** - Monthly options expiration (3rd Friday) + Quad Witching
+- **VIX Expiration** - VIX options expiration dates (Wednesday before OPEX)
+- **NFP (Jobs Report)** - Non-farm payroll releases (1st Friday monthly)
+- **JOLTS** - Job Openings and Labor Turnover Survey dates
+- **End/Beginning of Quarter** - Important institutional rebalancing dates
+- **Smart Prioritization** - Major events highlighted, all trading days available
 
 ### 📱 **Command Line Analysis**
 ```bash
@@ -679,7 +708,25 @@ find data/ -name "*.json" -mtime +7 -delete
 
 ## 🔄 **Version History**
 
-### v2.1 (Current) - Real Market Data Revolution
+### v2.1.1 (Current) - Options Sorting System Fix
+- **🔧 Critical Sorting Fix** - Fixed options sorting functionality that was previously non-functional
+- **🎯 Complete Sorting Implementation** - All 9 sorting methods now work correctly:
+  - 🏆 **Best Overall** - Highest day trading scores first
+  - 💰 **Cheapest First** - Lowest premiums first
+  - 💎 **Most Expensive** - Highest premiums first  
+  - 📈 **Highest Delta** - Greatest price sensitivity
+  - 🎢 **Highest Gamma** - Maximum acceleration potential
+  - 🎯 **Best Probability** - Highest ITM probability
+  - 💧 **Best Liquidity** - Best liquidity scores
+  - 📊 **Highest OI** - Maximum open interest
+  - 💹 **Best Risk/Reward** - Optimal R/R ratios (high to low)
+- **🔄 View-Aware Sorting** - Works with Chain View, Calls Only, and Puts Only modes
+- **✅ Data Storage Fix** - Properly stores currentResults and currentSummary for sorting access
+- **🎨 Visual Feedback** - Green flash confirmation when sorting is applied
+- **🐛 Property Name Fix** - Corrected prop_profit → prob_itm, target_move_rr → aggressive_rr
+- **📱 Real-Time Sorting** - Instant results reordering without page refresh
+
+### v2.1 - Real Market Data Revolution
 - **🔥 Real Market IV Detection** - Automatic VIX/VIX9D-based IV calculation
 - **🔥 Hybrid Polygon.io System** - Bypasses premium subscription limitations
 - **🔥 Expected Move Calculator** - Proper formula: Price × IV × √(T/252)

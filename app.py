@@ -621,6 +621,192 @@ def calculate_expected_moves_hybrid():
         print(f"❌ Error calculating expected moves: {e}")
         return jsonify({'error': str(e)}), 500
 
+@app.route('/api/expiration-dates/<symbol>')
+def get_expiration_dates(symbol):
+    """Get all valid trading days with economic event information"""
+    try:
+        from datetime import datetime, timedelta
+        import calendar
+        
+        # Get current date
+        today = datetime.now()
+        
+        expiration_dates = []
+        
+        # Generate next 90 days of valid trading days
+        for day_offset in range(1, 91):  # Next 90 days
+            target_date = today + timedelta(days=day_offset)
+            
+            # Skip weekends
+            if target_date.weekday() >= 5:  # Saturday=5, Sunday=6
+                continue
+            
+            # Skip major holidays (basic list)
+            month = target_date.month
+            day = target_date.day
+            
+            # Skip obvious holidays
+            holidays = [
+                (1, 1),   # New Year's Day
+                (7, 4),   # Independence Day
+                (12, 25), # Christmas
+            ]
+            
+            if (month, day) in holidays:
+                continue
+            
+            dte = day_offset
+            year = target_date.year
+            
+            # Check for economic events and options expirations
+            economic_events = []
+            expiry_type = "Trading Day"
+            is_options_expiry = False
+            
+            # Accurate 2025 Economic Calendar Data
+            if year == 2025:
+                date_str = target_date.strftime('%Y-%m-%d')
+                
+                # CPI Dates (Wednesdays)
+                cpi_dates = [
+                    '2025-01-08', '2025-02-12', '2025-03-12', '2025-04-09',
+                    '2025-05-14', '2025-06-11', '2025-07-09', '2025-08-13',
+                    '2025-09-10', '2025-10-08', '2025-11-12', '2025-12-10'
+                ]
+                if date_str in cpi_dates:
+                    economic_events.append("CPI")
+                
+                # PPI Dates (Thursdays)
+                ppi_dates = [
+                    '2025-01-09', '2025-02-13', '2025-03-13', '2025-04-10',
+                    '2025-05-08', '2025-06-12', '2025-07-10', '2025-08-14',
+                    '2025-09-11', '2025-10-09', '2025-11-13', '2025-12-11'
+                ]
+                if date_str in ppi_dates:
+                    economic_events.append("PPI")
+                
+                # JOLTS Dates (Tuesdays)
+                jolts_dates = [
+                    '2025-01-07', '2025-02-04', '2025-03-04', '2025-04-01',
+                    '2025-05-06', '2025-06-03', '2025-07-01', '2025-08-05',
+                    '2025-09-02', '2025-10-07', '2025-11-04', '2025-12-02'
+                ]
+                if date_str in jolts_dates:
+                    economic_events.append("JOLTS")
+                
+                # FOMC Dates (Wednesdays)
+                fomc_dates = [
+                    '2025-03-19', '2025-06-18'
+                ]
+                if date_str in fomc_dates:
+                    economic_events.append("FOMC")
+                
+                # VIX Expiration Dates (Wednesdays)
+                vix_dates = [
+                    '2025-01-15', '2025-02-19', '2025-03-19', '2025-04-16',
+                    '2025-05-14', '2025-06-18', '2025-07-16', '2025-08-13',
+                    '2025-09-17', '2025-10-15', '2025-11-19', '2025-12-17'
+                ]
+                if date_str in vix_dates:
+                    economic_events.append("VIXperation")
+                
+                # Monthly OPEX Dates (3rd Fridays)
+                opex_dates = [
+                    '2025-01-17', '2025-02-21', '2025-03-21', '2025-04-18',
+                    '2025-05-16', '2025-06-20', '2025-07-18', '2025-08-15',
+                    '2025-09-19', '2025-10-17', '2025-11-21', '2025-12-19'
+                ]
+                if date_str in opex_dates:
+                    economic_events.append("OPEX")
+                    is_options_expiry = True
+                    expiry_type = "Monthly Expiry"
+                
+                # Quad Witching Dates (Quarterly OPEX)
+                quad_witching_dates = [
+                    '2025-03-21', '2025-06-20', '2025-09-19', '2025-12-19'
+                ]
+                if date_str in quad_witching_dates:
+                    economic_events.append("Quad Witching")
+                    expiry_type = "Quarterly Expiry"
+                
+                # NFP (Jobs Report) Dates (Fridays)
+                nfp_dates = [
+                    '2025-01-03', '2025-02-07', '2025-03-07', '2025-04-04',
+                    '2025-05-02', '2025-06-06', '2025-07-04', '2025-08-01',
+                    '2025-09-05', '2025-10-03', '2025-11-07', '2025-12-05'
+                ]
+                if date_str in nfp_dates:
+                    economic_events.append("NFP")
+                
+                # End of Quarter
+                eoq_dates = ['2025-03-31', '2025-06-30', '2025-09-30', '2025-12-31']
+                if date_str in eoq_dates:
+                    economic_events.append("EoQ")
+                
+                # Beginning of Quarter  
+                boq_dates = ['2025-04-01', '2025-07-01', '2025-10-01']
+                if date_str in boq_dates:
+                    economic_events.append("BoQ")
+            
+            # Weekly options expirations (all Fridays)
+            if target_date.weekday() == 4:  # Friday
+                is_options_expiry = True
+                if expiry_type == "Trading Day":  # Not already set to Monthly/Quarterly
+                    expiry_type = "Weekly Expiry"
+            
+            # Format display with events
+            display_parts = [target_date.strftime('%a %b %d, %Y')]
+            if economic_events:
+                events_str = ", ".join(economic_events)
+                display_parts.append(f"({events_str})")
+            
+            display_date = " ".join(display_parts)
+            
+            # Add special styling for important dates
+            priority = 0
+            if is_options_expiry:
+                priority += 10
+            if "OPEX" in economic_events:
+                priority += 20
+            if "FOMC" in economic_events:
+                priority += 15
+            if "CPI" in economic_events or "PPI" in economic_events:
+                priority += 10
+            if "VIXperation" in economic_events:
+                priority += 8
+            if "Earnings" in economic_events:
+                priority += 5
+            
+            expiration_dates.append({
+                'date': target_date.strftime('%Y-%m-%d'),
+                'display_date': display_date,
+                'dte': dte,
+                'expiry_type': expiry_type,
+                'economic_events': economic_events,
+                'is_options_expiry': is_options_expiry,
+                'is_monthly': expiry_type == "Monthly Expiry",
+                'is_quarterly': expiry_type == "Quarterly Expiry",
+                'priority': priority,
+                'weekday': target_date.strftime('%A')
+            })
+        
+        # Sort by date
+        expiration_dates.sort(key=lambda x: x['date'])
+        
+        return jsonify({
+            'success': True,
+            'symbol': symbol.upper(),
+            'expiration_dates': expiration_dates,
+            'total_days': len(expiration_dates),
+            'timestamp': datetime.now().isoformat()
+        })
+        
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 400
+
 if __name__ == '__main__':
     # Create data directory if it doesn't exist
     os.makedirs('data', exist_ok=True)
