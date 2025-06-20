@@ -57,6 +57,19 @@ optionscalculator/
 ## 🚀 **Quick Start**
 
 ### 🐳 **Docker Deployment (Easiest)**
+
+#### 🪟 **Windows Users** - See [WINDOWS_DOCKER_SETUP.md](WINDOWS_DOCKER_SETUP.md)
+```powershell
+# Quick Windows setup (5 minutes):
+git clone https://github.com/secbitchris/optionscalculator.git
+cd optionscalculator
+docker-compose up --build -d
+
+# Open browser to: http://localhost:5002
+# Complete step-by-step guide: WINDOWS_DOCKER_SETUP.md
+```
+
+#### 🍎🐧 **macOS/Linux Users**
 ```bash
 # Quick Docker setup - everything included!
 ./docker-deploy.sh build
@@ -397,7 +410,14 @@ The Real Data Only mode eliminates all estimated values and provides analysis ex
 
 ## 🐳 **Docker Deployment**
 
-### 🚀 **Quick Docker Setup**
+### 🪟 **Windows Users**
+**See the dedicated [Windows Docker Setup Guide](WINDOWS_DOCKER_SETUP.md)** for complete step-by-step instructions including:
+- Docker Desktop installation
+- PowerShell commands for Windows
+- Troubleshooting Windows-specific issues
+- Complete removal instructions
+
+### 🚀 **Quick Docker Setup (macOS/Linux)**
 ```bash
 # Build and start in one command
 ./docker-deploy.sh build && ./docker-deploy.sh start
