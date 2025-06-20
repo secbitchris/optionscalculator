@@ -623,85 +623,145 @@ def calculate_expected_moves_hybrid():
 
 @app.route('/api/expiration-dates/<symbol>')
 def get_expiration_dates(symbol):
-    """Get options expiration dates with economic event information"""
+    """Get all valid trading days with economic event information"""
     try:
         from datetime import datetime, timedelta
         import calendar
         
         # Get current date
         today = datetime.now()
-        current_year = today.year
-        current_month = today.month
         
         expiration_dates = []
         
-        # Generate next 12 months of expiration dates
-        for month_offset in range(12):
-            target_date = today + timedelta(days=30 * month_offset)
-            year = target_date.year
-            month = target_date.month
+        # Generate next 90 days of valid trading days
+        for day_offset in range(1, 91):  # Next 90 days
+            target_date = today + timedelta(days=day_offset)
             
-            # Weekly expirations (Fridays)
-            for week in range(5):  # Up to 5 weeks per month
-                # Find the Friday of each week
+            # Skip weekends
+            if target_date.weekday() >= 5:  # Saturday=5, Sunday=6
+                continue
+            
+            # Skip major holidays (basic list)
+            month = target_date.month
+            day = target_date.day
+            
+            # Skip obvious holidays
+            holidays = [
+                (1, 1),   # New Year's Day
+                (7, 4),   # Independence Day
+                (12, 25), # Christmas
+            ]
+            
+            if (month, day) in holidays:
+                continue
+            
+            dte = day_offset
+            year = target_date.year
+            
+            # Check for economic events and options expirations
+            economic_events = []
+            expiry_type = "Standard"
+            is_options_expiry = False
+            
+            # Check if it's a Friday (options expiration day)
+            if target_date.weekday() == 4:  # Friday
+                is_options_expiry = True
+                
+                # Monthly expiration (3rd Friday)
                 first_day = datetime(year, month, 1)
                 first_friday = first_day + timedelta(days=(4 - first_day.weekday()) % 7)
-                friday = first_friday + timedelta(weeks=week)
+                third_friday = first_friday + timedelta(weeks=2)
                 
-                # Only include if it's in the current month and in the future
-                if friday.month == month and friday >= today:
-                    dte = (friday - today).days
-                    if dte <= 365:  # Limit to 1 year
-                        
-                        # Determine expiry type
-                        is_monthly = friday.day >= 15 and friday.day <= 21  # 3rd Friday typically
-                        is_quarterly = month % 3 == 0 and is_monthly
-                        
-                        # Check for economic events
-                        economic_events = []
-                        
-                        # OPEX (3rd Friday of every month)
-                        if is_monthly:
-                            economic_events.append("OPEX")
-                        
-                        # VIXperation (Wednesday before 3rd Friday)
-                        vix_date = friday - timedelta(days=2)
-                        if abs((vix_date - friday).days) <= 2:
-                            economic_events.append("VIXperation")
-                        
-                        # FOMC meetings (approximate dates - 8 times per year)
-                        fomc_months = [1, 3, 5, 6, 7, 9, 11, 12]  # Typical FOMC months
-                        if month in fomc_months and 15 <= friday.day <= 25:
-                            economic_events.append("FOMC")
-                        
-                        # CPI (usually 2nd Tuesday of month)
-                        second_tuesday = first_day + timedelta(days=(1 - first_day.weekday()) % 7 + 7)
-                        if abs((friday - second_tuesday).days) <= 3:
-                            economic_events.append("CPI")
-                        
-                        # PPI (usually day before CPI)
-                        ppi_date = second_tuesday - timedelta(days=1)
-                        if abs((friday - ppi_date).days) <= 3:
-                            economic_events.append("PPI")
-                        
-                        # Earnings season (roughly 4 times per year)
-                        earnings_months = [1, 4, 7, 10]  # Typical earnings months
-                        if month in earnings_months:
-                            economic_events.append("Earnings")
-                        
-                        expiry_type = "Monthly" if is_monthly else "Weekly"
-                        if is_quarterly:
-                            expiry_type = "Quarterly"
-                        
-                        expiration_dates.append({
-                            'date': friday.strftime('%Y-%m-%d'),
-                            'display_date': friday.strftime('%a %b %d, %Y'),
-                            'dte': dte,
-                            'expiry_type': expiry_type,
-                            'economic_events': economic_events,
-                            'is_monthly': is_monthly,
-                            'is_quarterly': is_quarterly
-                        })
+                is_monthly = abs((target_date - third_friday).days) <= 3
+                is_quarterly = month % 3 == 0 and is_monthly
+                
+                if is_monthly:
+                    economic_events.append("OPEX")
+                    expiry_type = "Monthly Expiry"
+                elif is_quarterly:
+                    expiry_type = "Quarterly Expiry"
+                else:
+                    expiry_type = "Weekly Expiry"
+            
+            # VIXperation (Wednesday before 3rd Friday)
+            if target_date.weekday() == 2:  # Wednesday
+                first_day = datetime(year, month, 1)
+                first_friday = first_day + timedelta(days=(4 - first_day.weekday()) % 7)
+                third_friday = first_friday + timedelta(weeks=2)
+                vix_wednesday = third_friday - timedelta(days=2)
+                
+                if abs((target_date - vix_wednesday).days) <= 1:
+                    economic_events.append("VIXperation")
+            
+            # FOMC meetings (approximate dates - 8 times per year)
+            fomc_months = [1, 3, 5, 6, 7, 9, 11, 12]
+            if month in fomc_months and 15 <= day <= 25 and target_date.weekday() < 3:  # Tue/Wed
+                economic_events.append("FOMC")
+            
+            # CPI (usually 2nd Tuesday of month)
+            if target_date.weekday() == 1:  # Tuesday
+                first_day = datetime(year, month, 1)
+                first_tuesday = first_day + timedelta(days=(1 - first_day.weekday()) % 7)
+                second_tuesday = first_tuesday + timedelta(weeks=1)
+                
+                if abs((target_date - second_tuesday).days) <= 2:
+                    economic_events.append("CPI")
+            
+            # PPI (usually Monday before CPI)
+            if target_date.weekday() == 0:  # Monday
+                first_day = datetime(year, month, 1)
+                first_tuesday = first_day + timedelta(days=(1 - first_day.weekday()) % 7)
+                second_tuesday = first_tuesday + timedelta(weeks=1)
+                ppi_monday = second_tuesday - timedelta(days=1)
+                
+                if abs((target_date - ppi_monday).days) <= 2:
+                    economic_events.append("PPI")
+            
+            # Earnings season (roughly 4 times per year)
+            earnings_months = [1, 4, 7, 10]
+            if month in earnings_months and 10 <= day <= 25:
+                economic_events.append("Earnings")
+            
+            # Fed speeches and other events (sample)
+            if target_date.weekday() < 5 and day % 7 == 0:  # Weekly pattern
+                if month in [2, 5, 8, 11]:  # Quarterly
+                    economic_events.append("Fed Speech")
+            
+            # Format display with events
+            display_parts = [target_date.strftime('%a %b %d, %Y')]
+            if economic_events:
+                events_str = ", ".join(economic_events)
+                display_parts.append(f"({events_str})")
+            
+            display_date = " ".join(display_parts)
+            
+            # Add special styling for important dates
+            priority = 0
+            if is_options_expiry:
+                priority += 10
+            if "OPEX" in economic_events:
+                priority += 20
+            if "FOMC" in economic_events:
+                priority += 15
+            if "CPI" in economic_events or "PPI" in economic_events:
+                priority += 10
+            if "VIXperation" in economic_events:
+                priority += 8
+            if "Earnings" in economic_events:
+                priority += 5
+            
+            expiration_dates.append({
+                'date': target_date.strftime('%Y-%m-%d'),
+                'display_date': display_date,
+                'dte': dte,
+                'expiry_type': expiry_type,
+                'economic_events': economic_events,
+                'is_options_expiry': is_options_expiry,
+                'is_monthly': expiry_type == "Monthly Expiry",
+                'is_quarterly': expiry_type == "Quarterly Expiry",
+                'priority': priority,
+                'weekday': target_date.strftime('%A')
+            })
         
         # Sort by date
         expiration_dates.sort(key=lambda x: x['date'])
@@ -710,6 +770,7 @@ def get_expiration_dates(symbol):
             'success': True,
             'symbol': symbol.upper(),
             'expiration_dates': expiration_dates,
+            'total_days': len(expiration_dates),
             'timestamp': datetime.now().isoformat()
         })
         

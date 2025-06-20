@@ -635,7 +635,7 @@ class OptionsAnalysisDashboard {
         const select = document.getElementById('expiration-date');
         
         // Show loading
-        select.innerHTML = '<option value="">Loading expiration dates...</option>';
+        select.innerHTML = '<option value="">Loading trading days...</option>';
         
         try {
             const response = await fetch(`/api/expiration-dates/${underlying}`);
@@ -648,45 +648,109 @@ class OptionsAnalysisDashboard {
                 // Add default option
                 const defaultOption = document.createElement('option');
                 defaultOption.value = '';
-                defaultOption.textContent = 'Select expiration date...';
+                defaultOption.textContent = 'Select any trading day...';
                 select.appendChild(defaultOption);
                 
-                // Add expiration dates
+                // Group dates by importance for better organization
+                const highPriority = [];
+                const mediumPriority = [];
+                const standardDays = [];
+                
                 data.expiration_dates.forEach(exp => {
-                    const option = document.createElement('option');
-                    option.value = exp.date;
-                    option.dataset.dte = exp.dte;
-                    option.dataset.expiryType = exp.expiry_type;
-                    option.dataset.economicEvents = JSON.stringify(exp.economic_events);
-                    option.dataset.isMonthly = exp.is_monthly;
-                    option.dataset.isQuarterly = exp.is_quarterly;
-                    
-                    // Build display text
-                    let displayText = exp.display_date;
-                    if (exp.economic_events.length > 0) {
-                        displayText += ` (${exp.economic_events.join(', ')})`;
+                    if (exp.priority >= 20) {
+                        highPriority.push(exp);
+                    } else if (exp.priority >= 10) {
+                        mediumPriority.push(exp);
+                    } else {
+                        standardDays.push(exp);
                     }
-                    
-                    option.textContent = displayText;
-                    select.appendChild(option);
                 });
                 
-                // Auto-select the first weekly expiration (usually within 7-14 days)
-                const weeklyOptions = data.expiration_dates.filter(exp => !exp.is_monthly && exp.dte <= 14);
-                if (weeklyOptions.length > 0) {
-                    select.value = weeklyOptions[0].date;
+                // Add high priority dates first (OPEX, major events)
+                if (highPriority.length > 0) {
+                    const optgroup = document.createElement('optgroup');
+                    optgroup.label = '📅 Major Events & Options Expirations';
+                    highPriority.forEach(exp => {
+                        optgroup.appendChild(this.createDateOption(exp));
+                    });
+                    select.appendChild(optgroup);
+                }
+                
+                // Add medium priority dates (weekly expirations, economic events)
+                if (mediumPriority.length > 0) {
+                    const optgroup = document.createElement('optgroup');
+                    optgroup.label = '📊 Economic Events & Weekly Expirations';
+                    mediumPriority.forEach(exp => {
+                        optgroup.appendChild(this.createDateOption(exp));
+                    });
+                    select.appendChild(optgroup);
+                }
+                
+                // Add standard trading days
+                if (standardDays.length > 0) {
+                    const optgroup = document.createElement('optgroup');
+                    optgroup.label = '📈 All Trading Days';
+                    standardDays.forEach(exp => {
+                        optgroup.appendChild(this.createDateOption(exp));
+                    });
+                    select.appendChild(optgroup);
+                }
+                
+                // Auto-select the next options expiration (Friday) within 14 days
+                const nextExpiry = data.expiration_dates.find(exp => 
+                    exp.is_options_expiry && exp.dte <= 14
+                );
+                
+                if (nextExpiry) {
+                    select.value = nextExpiry.date;
                     this.onExpirationDateChange();
+                } else {
+                    // Fallback to first high priority date
+                    if (highPriority.length > 0) {
+                        select.value = highPriority[0].date;
+                        this.onExpirationDateChange();
+                    }
                 }
                 
             } else {
                 select.innerHTML = '<option value="">Error loading dates</option>';
-                this.showAlert('Error loading expiration dates: ' + data.error, 'danger');
+                this.showAlert('Error loading trading days: ' + data.error, 'danger');
             }
         } catch (error) {
             console.error('Error loading expiration dates:', error);
             select.innerHTML = '<option value="">Error loading dates</option>';
-            this.showAlert('Network error loading expiration dates', 'danger');
+            this.showAlert('Network error loading trading days', 'danger');
         }
+    }
+    
+    createDateOption(exp) {
+        const option = document.createElement('option');
+        option.value = exp.date;
+        option.dataset.dte = exp.dte;
+        option.dataset.expiryType = exp.expiry_type;
+        option.dataset.economicEvents = JSON.stringify(exp.economic_events);
+        option.dataset.isMonthly = exp.is_monthly;
+        option.dataset.isQuarterly = exp.is_quarterly;
+        option.dataset.isOptionsExpiry = exp.is_options_expiry;
+        option.dataset.priority = exp.priority;
+        option.dataset.weekday = exp.weekday;
+        
+        // Use the pre-formatted display date that includes events
+        option.textContent = exp.display_date;
+        
+        // Add special styling for high priority dates
+        if (exp.priority >= 20) {
+            option.style.fontWeight = 'bold';
+            option.style.color = '#dc3545'; // Bootstrap danger color
+        } else if (exp.priority >= 15) {
+            option.style.fontWeight = 'bold';
+            option.style.color = '#fd7e14'; // Bootstrap warning color
+        } else if (exp.priority >= 10) {
+            option.style.fontWeight = '500';
+            option.style.color = '#0d6efd'; // Bootstrap primary color
+        }
+        
+        return option;
     }
     
     onExpirationDateChange() {
@@ -697,30 +761,76 @@ class OptionsAnalysisDashboard {
             const dte = selectedOption.dataset.dte;
             const expiryType = selectedOption.dataset.expiryType;
             const economicEvents = JSON.parse(selectedOption.dataset.economicEvents || '[]');
+            const isOptionsExpiry = selectedOption.dataset.isOptionsExpiry === 'true';
+            const weekday = selectedOption.dataset.weekday;
+            const priority = parseInt(selectedOption.dataset.priority || '0');
             
             // Update display elements
             document.getElementById('dte-display').textContent = `${dte} DTE`;
-            document.getElementById('expiry-type').textContent = expiryType;
             
-            // Update economic events display
+            // Enhanced expiry type display
+            let expiryDisplay = expiryType;
+            if (isOptionsExpiry) {
+                expiryDisplay += ` 📅`;
+            }
+            if (weekday) {
+                expiryDisplay += ` (${weekday})`;
+            }
+            document.getElementById('expiry-type').textContent = expiryDisplay;
+            
+            // Update economic events display with enhanced styling
             const eventsElement = document.getElementById('economic-events');
             if (economicEvents.length > 0) {
                 eventsElement.innerHTML = economicEvents.map(event => {
-                    let badgeClass = 'bg-warning text-dark';
+                    let badgeClass = 'bg-secondary text-white';
+                    let icon = '';
                     
-                    // Color code by importance
-                    if (event === 'FOMC' || event === 'CPI') {
-                        badgeClass = 'bg-danger text-white';
-                    } else if (event === 'OPEX' || event === 'VIXperation' || event === 'PPI') {
-                        badgeClass = 'bg-orange text-white';
-                    } else if (event === 'Earnings') {
-                        badgeClass = 'bg-info text-white';
+                    // Color code and add icons by importance
+                    switch(event) {
+                        case 'FOMC':
+                            badgeClass = 'bg-danger text-white';
+                            icon = '🏛️ ';
+                            break;
+                        case 'CPI':
+                            badgeClass = 'bg-danger text-white';
+                            icon = '📊 ';
+                            break;
+                        case 'OPEX':
+                            badgeClass = 'bg-warning text-dark';
+                            icon = '⚡ ';
+                            break;
+                        case 'VIXperation':
+                            badgeClass = 'bg-warning text-dark';
+                            icon = '📈 ';
+                            break;
+                        case 'PPI':
+                            badgeClass = 'bg-info text-white';
+                            icon = '🏭 ';
+                            break;
+                        case 'Earnings':
+                            badgeClass = 'bg-success text-white';
+                            icon = '💰 ';
+                            break;
+                        case 'Fed Speech':
+                            badgeClass = 'bg-primary text-white';
+                            icon = '🎤 ';
+                            break;
+                        default:
+                            badgeClass = 'bg-secondary text-white';
+                            icon = '📅 ';
                     }
                     
-                    return `<span class="badge ${badgeClass} ms-1">${event}</span>`;
+                    return `<span class="badge ${badgeClass} ms-1" title="${event}">${icon}${event}</span>`;
                 }).join('');
             } else {
-                eventsElement.innerHTML = '';
+                eventsElement.innerHTML = '<span class="text-muted">No major events</span>';
+            }
+            
+            // Add priority indicator
+            if (priority >= 20) {
+                eventsElement.innerHTML += ' <span class="badge bg-danger text-white ms-1">🔥 HIGH</span>';
+            } else if (priority >= 15) {
+                eventsElement.innerHTML += ' <span class="badge bg-warning text-dark ms-1">⚠️ MEDIUM</span>';
             }
             
             // Update the form's dte field for backend compatibility

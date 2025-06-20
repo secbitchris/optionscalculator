@@ -41,15 +41,21 @@
                                 <div class="form-text">Leave empty to auto-fetch live price</div>
                             </div>
                             <div class="mb-3">
-                                <label for="expiration-date" class="form-label">Expiration Date</label>
+                                <label for="expiration-date" class="form-label">Target Date</label>
                                 <select class="form-select" id="expiration-date" name="expiration_date">
-                                    <option value="">Loading expiration dates...</option>
+                                    <option value="">Loading trading days...</option>
                                 </select>
                                 <div class="form-text">
                                     <small id="dte-display" class="text-muted">-</small>
                                     <span class="mx-2">•</span>
                                     <small id="expiry-type" class="text-muted">-</small>
-                                    <span id="economic-events" class="text-warning"></span>
+                                    <div id="economic-events" class="mt-1"></div>
+                                </div>
+                                <div class="form-text">
+                                    <small class="text-info">
+                                        <i class="fas fa-info-circle me-1"></i>
+                                        Select any trading day. Economic events and options expirations are labeled.
+                                    </small>
                                 </div>
                             </div>
                             <div class="mb-3">
