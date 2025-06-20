@@ -83,7 +83,8 @@ class OptionsAnalysisDashboard {
         });
         
         // Sort dropdown
-        document.getElementById('sort-options').addEventListener('change', () => {
+        document.getElementById('sort-options').addEventListener('change', (e) => {
+            console.log('Sort dropdown changed to:', e.target.value);
             this.applySorting();
         });
     }
@@ -452,9 +453,13 @@ class OptionsAnalysisDashboard {
     }
     
     applySorting() {
-        if (!this.currentResults) return;
+        if (!this.currentResults) {
+            console.log('No current results to sort');
+            return;
+        }
         
         const sortBy = document.getElementById('sort-options').value;
+        console.log('Sorting by:', sortBy);
         
         // Get sorting function
         const getSortFunction = (sortBy) => {
@@ -485,11 +490,18 @@ class OptionsAnalysisDashboard {
         const sortFunction = getSortFunction(sortBy);
         
         // Sort the data arrays
+        const originalCallsLength = this.callsData.length;
+        const originalPutsLength = this.putsData.length;
+        
         this.callsData = [...this.callsData].sort(sortFunction);
         this.putsData = [...this.putsData].sort(sortFunction);
         
+        console.log(`Sorted ${originalCallsLength} calls and ${originalPutsLength} puts`);
+        
         // Rebuild the current view
         const activeView = document.querySelector('input[name="options-filter"]:checked').id;
+        console.log('Active view:', activeView);
+        
         switch(activeView) {
             case 'filter-all':
                 this.buildChainView(this.callsData, this.putsData, this.currentPrice);
@@ -501,6 +513,18 @@ class OptionsAnalysisDashboard {
                 this.buildPutsView(this.putsData);
                 break;
         }
+        
+        console.log('Sorting complete');
+        
+        // Show a brief visual feedback for sorting
+        const sortDropdown = document.getElementById('sort-options');
+        const originalBg = sortDropdown.style.backgroundColor;
+        sortDropdown.style.backgroundColor = '#28a745';
+        sortDropdown.style.color = 'white';
+        setTimeout(() => {
+            sortDropdown.style.backgroundColor = originalBg;
+            sortDropdown.style.color = '';
+        }, 500);
     }
     
     // Helper methods for formatting
