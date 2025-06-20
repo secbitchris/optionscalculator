@@ -16,37 +16,12 @@ class OptionsAnalysisDashboard {
     }
     
     bindEvents() {
-        // Main analysis form
+        // Form submissions
         document.getElementById('analysis-form').addEventListener('submit', (e) => {
             e.preventDefault();
             this.runAnalysis();
         });
         
-        // Fetch price button
-        document.getElementById('fetch-price').addEventListener('click', () => {
-            this.fetchLivePrice();
-        });
-        
-        // Detect market IV button
-        document.getElementById('detect-iv-btn').addEventListener('click', () => {
-            this.detectMarketIV();
-        });
-        
-        // Save and export buttons
-        document.getElementById('save-btn').addEventListener('click', () => {
-            this.saveResults();
-        });
-        
-        document.getElementById('export-btn').addEventListener('click', () => {
-            this.exportCSV();
-        });
-        
-        // Underlying selection change
-        document.getElementById('underlying').addEventListener('change', () => {
-            this.onUnderlyingChange();
-        });
-        
-        // Enhanced features forms
         document.getElementById('iv-form').addEventListener('submit', (e) => {
             e.preventDefault();
             this.calculateIV();
@@ -62,8 +37,39 @@ class OptionsAnalysisDashboard {
             this.compareGreeks();
         });
         
-        // Auto-fill scenario base price when main analysis is done
-        this.autoFillScenarioPrice();
+        // Button clicks
+        document.getElementById('fetch-price-btn').addEventListener('click', () => {
+            this.fetchLivePrice();
+        });
+        
+        document.getElementById('detect-iv-btn').addEventListener('click', () => {
+            this.detectMarketIV();
+        });
+        
+        document.getElementById('save-btn').addEventListener('click', () => {
+            this.saveResults();
+        });
+        
+        document.getElementById('export-btn').addEventListener('click', () => {
+            this.exportCSV();
+        });
+        
+        // Underlying symbol change
+        document.getElementById('underlying').addEventListener('change', () => {
+            this.onUnderlyingChange();
+        });
+        
+        // Auto-fill scenario price when current price changes
+        document.getElementById('current_price').addEventListener('input', () => {
+            this.autoFillScenarioPrice();
+        });
+        
+        // Filter controls
+        document.querySelectorAll('input[name="options-filter"]').forEach(radio => {
+            radio.addEventListener('change', (e) => {
+                this.switchView(e.target.id);
+            });
+        });
     }
     
     async checkAPIStatus() {
@@ -103,7 +109,7 @@ class OptionsAnalysisDashboard {
     
     async fetchLivePrice() {
         const underlying = document.getElementById('underlying').value;
-        const button = document.getElementById('fetch-price');
+        const button = document.getElementById('fetch-price-btn');
         const input = document.getElementById('current_price');
         
         // Show loading state
@@ -278,46 +284,193 @@ class OptionsAnalysisDashboard {
     }
     
     displayResults(results, summary) {
-        const tbody = document.getElementById('results-tbody');
+        // Store current price for ATM detection
+        const currentPrice = parseFloat(document.getElementById('current_price').value);
+        
+        // Separate calls and puts
+        const calls = results.filter(r => r.type === 'CALL').sort((a, b) => a.strike - b.strike);
+        const puts = results.filter(r => r.type === 'PUT').sort((a, b) => a.strike - b.strike);
+        
+        // Store for view switching
+        this.callsData = calls;
+        this.putsData = puts;
+        this.currentPrice = currentPrice;
+        
+        // Update current price display
+        document.getElementById('current-spot-price').textContent = `Spot: $${currentPrice.toFixed(2)}`;
+        
+        // Show filter controls
+        document.getElementById('filter-controls').classList.remove('d-none');
+        
+        // Build chain view (default)
+        this.buildChainView(calls, puts, currentPrice);
+        
+        // Build individual views for switching
+        this.buildCallsView(calls);
+        this.buildPutsView(puts);
+        
+        this.showResults();
+    }
+    
+    buildChainView(calls, puts, currentPrice) {
+        const tbody = document.getElementById('chain-tbody');
         tbody.innerHTML = '';
         
-        results.forEach(row => {
+        // Get all unique strikes, sorted
+        const allStrikes = [...new Set([...calls.map(c => c.strike), ...puts.map(p => p.strike)])].sort((a, b) => a - b);
+        
+        allStrikes.forEach(strike => {
+            const call = calls.find(c => c.strike === strike);
+            const put = puts.find(p => p.strike === strike);
+            
             const tr = document.createElement('tr');
             
-            // Determine score class
-            let scoreClass = '';
-            if (row.day_trade_score >= 0.4) scoreClass = 'score-excellent';
-            else if (row.day_trade_score >= 0.2) scoreClass = 'score-good';
-            else scoreClass = 'score-poor';
+            // Determine if this is ATM (within $5 of current price)
+            const isATM = Math.abs(strike - currentPrice) <= 5;
+            if (isATM) {
+                tr.classList.add('atm-row');
+            }
             
-            // Format OI and Volume with badges
-            const oiBadge = row.oi_source === 'REAL' ? 
-                `<span class="badge bg-success" title="Real data from Polygon.io">${row.open_interest.toLocaleString()}</span>` :
-                `<span class="badge bg-warning" title="Estimated">${row.open_interest.toLocaleString()}</span>`;
+            // Determine ITM status
+            const callITM = strike < currentPrice;
+            const putITM = strike > currentPrice;
             
-            const volBadge = row.volume_source === 'REAL' ? 
-                `<span class="badge bg-success" title="Real volume data">${row.volume.toLocaleString()}</span>` :
-                `<span class="badge bg-secondary" title="Estimated from OI">${row.volume.toLocaleString()}</span>`;
-
             tr.innerHTML = `
-                <td><span class="badge ${row.type === 'CALL' ? 'bg-success' : 'bg-info'}">${row.type}</span></td>
-                <td>$${row.strike.toFixed(0)}</td>
-                <td>$${row.premium.toFixed(2)}</td>
-                <td>${row.delta.toFixed(3)}</td>
-                <td>${row.gamma.toFixed(6)}</td>
-                <td>${row.theta.toFixed(6)}</td>
-                <td>${row.vega.toFixed(4)}</td>
-                <td>${oiBadge}</td>
-                <td>${volBadge}</td>
-                <td class="${scoreClass}">${row.day_trade_score.toFixed(3)}</td>
-                <td>${row.aggressive_rr.toFixed(3)}</td>
-                <td>${(row.prob_itm * 100).toFixed(1)}%</td>
+                <!-- Call Side -->
+                <td class="${callITM ? 'itm-call' : ''}">${call ? this.formatScore(call.day_trade_score) : '-'}</td>
+                <td class="${callITM ? 'itm-call' : ''}">${call ? this.formatPremium(call.premium) : '-'}</td>
+                <td class="${callITM ? 'itm-call' : ''}">${call ? this.formatDelta(call.delta) : '-'}</td>
+                <td class="${callITM ? 'itm-call' : ''}">${call ? call.gamma.toFixed(6) : '-'}</td>
+                <td class="${callITM ? 'itm-call' : ''}">${call ? this.formatOI(call) : '-'}</td>
+                <td class="${callITM ? 'itm-call' : ''}">${call ? this.formatVolume(call) : '-'}</td>
+                
+                <!-- Strike Column -->
+                <td class="strike-column">$${strike.toFixed(0)}</td>
+                
+                <!-- Put Side -->
+                <td class="${putITM ? 'itm-put' : ''}">${put ? this.formatScore(put.day_trade_score) : '-'}</td>
+                <td class="${putITM ? 'itm-put' : ''}">${put ? this.formatPremium(put.premium) : '-'}</td>
+                <td class="${putITM ? 'itm-put' : ''}">${put ? this.formatDelta(put.delta) : '-'}</td>
+                <td class="${putITM ? 'itm-put' : ''}">${put ? put.gamma.toFixed(6) : '-'}</td>
+                <td class="${putITM ? 'itm-put' : ''}">${put ? this.formatOI(put) : '-'}</td>
+                <td class="${putITM ? 'itm-put' : ''}">${put ? this.formatVolume(put) : '-'}</td>
             `;
             
             tbody.appendChild(tr);
         });
+    }
+    
+    buildCallsView(calls) {
+        const tbody = document.getElementById('calls-tbody');
+        tbody.innerHTML = '';
         
-        this.showResults();
+        calls.forEach(call => {
+            const tr = document.createElement('tr');
+            
+            tr.innerHTML = `
+                <td>$${call.strike.toFixed(0)}</td>
+                <td>${this.formatPremium(call.premium)}</td>
+                <td>${this.formatDelta(call.delta)}</td>
+                <td>${call.gamma.toFixed(6)}</td>
+                <td>${call.theta.toFixed(6)}</td>
+                <td>${call.vega.toFixed(4)}</td>
+                <td>${this.formatOI(call)}</td>
+                <td>${this.formatVolume(call)}</td>
+                <td>${this.formatScore(call.day_trade_score)}</td>
+                <td>${call.aggressive_rr.toFixed(3)}</td>
+                <td>${(call.prob_itm * 100).toFixed(1)}%</td>
+            `;
+            
+            tbody.appendChild(tr);
+        });
+    }
+    
+    buildPutsView(puts) {
+        const tbody = document.getElementById('puts-tbody');
+        tbody.innerHTML = '';
+        
+        puts.forEach(put => {
+            const tr = document.createElement('tr');
+            
+            tr.innerHTML = `
+                <td>$${put.strike.toFixed(0)}</td>
+                <td>${this.formatPremium(put.premium)}</td>
+                <td>${this.formatDelta(put.delta)}</td>
+                <td>${put.gamma.toFixed(6)}</td>
+                <td>${put.theta.toFixed(6)}</td>
+                <td>${put.vega.toFixed(4)}</td>
+                <td>${this.formatOI(put)}</td>
+                <td>${this.formatVolume(put)}</td>
+                <td>${this.formatScore(put.day_trade_score)}</td>
+                <td>${put.aggressive_rr.toFixed(3)}</td>
+                <td>${(put.prob_itm * 100).toFixed(1)}%</td>
+            `;
+            
+            tbody.appendChild(tr);
+        });
+    }
+    
+    switchView(filterId) {
+        // Hide all views
+        document.getElementById('chain-view').classList.add('d-none');
+        document.getElementById('calls-view').classList.add('d-none');
+        document.getElementById('puts-view').classList.add('d-none');
+        
+        // Show selected view
+        switch(filterId) {
+            case 'filter-all':
+                document.getElementById('chain-view').classList.remove('d-none');
+                break;
+            case 'filter-calls':
+                document.getElementById('calls-view').classList.remove('d-none');
+                break;
+            case 'filter-puts':
+                document.getElementById('puts-view').classList.remove('d-none');
+                break;
+        }
+    }
+    
+    // Helper methods for formatting
+    formatScore(score) {
+        let className = '';
+        if (score >= 0.4) className = 'score-excellent';
+        else if (score >= 0.2) className = 'score-good';
+        else className = 'score-poor';
+        
+        return `<span class="${className}">${score.toFixed(3)}</span>`;
+    }
+    
+    formatPremium(premium) {
+        let className = '';
+        if (premium >= 5) className = 'premium-high';
+        else if (premium >= 1) className = 'premium-medium';
+        else className = 'premium-low';
+        
+        return `<span class="${className}">$${premium.toFixed(2)}</span>`;
+    }
+    
+    formatDelta(delta) {
+        const absDelta = Math.abs(delta);
+        let className = '';
+        if (absDelta >= 0.5) className = 'delta-high';
+        else if (absDelta >= 0.3) className = 'delta-medium';
+        else className = 'delta-low';
+        
+        return `<span class="${className}">${delta.toFixed(3)}</span>`;
+    }
+    
+    formatOI(option) {
+        const badge = option.oi_source === 'REAL' ? 
+            `<span class="badge bg-success" title="Real data from Polygon.io">${option.open_interest.toLocaleString()}</span>` :
+            `<span class="badge bg-warning" title="Estimated">${option.open_interest.toLocaleString()}</span>`;
+        return badge;
+    }
+    
+    formatVolume(option) {
+        const badge = option.volume_source === 'REAL' ? 
+            `<span class="badge bg-success" title="Real volume data">${option.volume.toLocaleString()}</span>` :
+            `<span class="badge bg-secondary" title="Estimated from OI">${option.volume.toLocaleString()}</span>`;
+        return badge;
     }
     
     updateSummaryCards(results) {

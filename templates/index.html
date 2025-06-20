@@ -36,7 +36,7 @@
                                 <div class="input-group">
                                     <span class="input-group-text">$</span>
                                     <input type="number" class="form-control" id="current_price" name="current_price" step="0.01" placeholder="Auto-fetch">
-                                    <button class="btn btn-outline-secondary" type="button" id="fetch-price"><i class="fas fa-sync-alt"></i></button>
+                                                                            <button class="btn btn-outline-secondary" type="button" id="fetch-price-btn"><i class="fas fa-sync-alt"></i></button>
                                 </div>
                                 <div class="form-text">Leave empty to auto-fetch live price</div>
                             </div>
@@ -245,7 +245,7 @@
             <div class="col-md-9">
                 <div class="card">
                     <div class="card-header d-flex justify-content-between align-items-center">
-                        <h5><i class="fas fa-table me-2"></i>Analysis Results</h5>
+                        <h5><i class="fas fa-table me-2"></i>Options Chain Analysis</h5>
                         <div>
                             <button class="btn btn-success btn-sm" id="save-btn" disabled><i class="fas fa-save me-1"></i> Save Results</button>
                             <button class="btn btn-info btn-sm" id="export-btn" disabled><i class="fas fa-download me-1"></i> Export CSV</button>
@@ -256,16 +256,126 @@
                             <div class="spinner-border text-primary" role="status"><span class="visually-hidden">Loading...</span></div>
                             <p class="mt-2">Analyzing options...</p>
                         </div>
-                        <div id="results-container" class="d-none">
-                            <div class="table-responsive">
-                                <table class="table table-striped table-hover" id="results-table">
-                                    <thead class="table-dark">
-                                        <tr><th>Type</th><th>Strike</th><th>Premium</th><th>Delta</th><th>Gamma</th><th>Theta</th><th>Vega</th><th>Open Interest</th><th>Volume</th><th>Score</th><th>R/R Ratio</th><th>Prob ITM</th></tr>
-                                    </thead>
-                                    <tbody id="results-tbody"></tbody>
-                                </table>
+                        
+                        <!-- Filter Controls -->
+                        <div id="filter-controls" class="d-none mb-3">
+                            <div class="row align-items-center">
+                                <div class="col-md-6">
+                                    <div class="btn-group" role="group" aria-label="Options filter">
+                                        <input type="radio" class="btn-check" name="options-filter" id="filter-all" autocomplete="off" checked>
+                                        <label class="btn btn-outline-primary btn-sm" for="filter-all">
+                                            <i class="fas fa-th me-1"></i>Chain View
+                                        </label>
+                                        
+                                        <input type="radio" class="btn-check" name="options-filter" id="filter-calls" autocomplete="off">
+                                        <label class="btn btn-outline-success btn-sm" for="filter-calls">
+                                            <i class="fas fa-arrow-up me-1"></i>Calls Only
+                                        </label>
+                                        
+                                        <input type="radio" class="btn-check" name="options-filter" id="filter-puts" autocomplete="off">
+                                        <label class="btn btn-outline-info btn-sm" for="filter-puts">
+                                            <i class="fas fa-arrow-down me-1"></i>Puts Only
+                                        </label>
+                                    </div>
+                                </div>
+                                <div class="col-md-6 text-end">
+                                    <small class="text-muted">
+                                        <i class="fas fa-info-circle me-1"></i>
+                                        <span class="badge bg-success">Real OI</span> 
+                                        <span class="badge bg-secondary">Est. Vol</span>
+                                        <span id="current-spot-price" class="ms-2"></span>
+                                    </small>
+                                </div>
                             </div>
                         </div>
+                        
+                        <!-- Options Chain View -->
+                        <div id="results-container" class="d-none">
+                            <!-- Chain View (Calls and Puts side by side) -->
+                            <div id="chain-view">
+                                <div class="table-responsive">
+                                    <table class="table table-sm table-hover options-chain-table" id="chain-table">
+                                        <thead class="table-dark">
+                                            <tr>
+                                                <!-- Calls Header -->
+                                                <th colspan="6" class="text-center bg-success text-white">CALLS</th>
+                                                <th class="text-center bg-dark">STRIKE</th>
+                                                <!-- Puts Header -->
+                                                <th colspan="6" class="text-center bg-info text-white">PUTS</th>
+                                            </tr>
+                                            <tr class="small">
+                                                <!-- Calls columns -->
+                                                <th>Score</th>
+                                                <th>Premium</th>
+                                                <th>Delta</th>
+                                                <th>Gamma</th>
+                                                <th>OI</th>
+                                                <th>Vol</th>
+                                                <!-- Strike -->
+                                                <th class="bg-light text-dark fw-bold">Strike</th>
+                                                <!-- Puts columns -->
+                                                <th>Score</th>
+                                                <th>Premium</th>
+                                                <th>Delta</th>
+                                                <th>Gamma</th>
+                                                <th>OI</th>
+                                                <th>Vol</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="chain-tbody"></tbody>
+                                    </table>
+                                </div>
+                            </div>
+                            
+                            <!-- List View (Calls Only) -->
+                            <div id="calls-view" class="d-none">
+                                <div class="table-responsive">
+                                    <table class="table table-striped table-hover" id="calls-table">
+                                        <thead class="table-success">
+                                            <tr>
+                                                <th><i class="fas fa-arrow-up me-1"></i>Strike</th>
+                                                <th>Premium</th>
+                                                <th>Delta</th>
+                                                <th>Gamma</th>
+                                                <th>Theta</th>
+                                                <th>Vega</th>
+                                                <th>Open Interest</th>
+                                                <th>Volume</th>
+                                                <th>Score</th>
+                                                <th>R/R Ratio</th>
+                                                <th>Prob ITM</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="calls-tbody"></tbody>
+                                    </table>
+                                </div>
+                            </div>
+                            
+                            <!-- List View (Puts Only) -->
+                            <div id="puts-view" class="d-none">
+                                <div class="table-responsive">
+                                    <table class="table table-striped table-hover" id="puts-table">
+                                        <thead class="table-info">
+                                            <tr>
+                                                <th><i class="fas fa-arrow-down me-1"></i>Strike</th>
+                                                <th>Premium</th>
+                                                <th>Delta</th>
+                                                <th>Gamma</th>
+                                                <th>Theta</th>
+                                                <th>Vega</th>
+                                                <th>Open Interest</th>
+                                                <th>Volume</th>
+                                                <th>Score</th>
+                                                <th>R/R Ratio</th>
+                                                <th>Prob ITM</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="puts-tbody"></tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                        
                         <div id="welcome-message" class="text-center">
                             <i class="fas fa-chart-line fa-3x text-muted mb-3"></i>
                             <h4>Welcome to Options Analysis Dashboard</h4>
