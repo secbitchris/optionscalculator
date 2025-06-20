@@ -272,8 +272,12 @@ class OptionsAnalysisDashboard {
             risk_free_rate: parseFloat(formData.get('risk_free_rate')) // Keep as percentage - backend will convert
         };
         
+        // Check if real-data-only mode is enabled
+        const realDataOnly = document.getElementById('real-data-only') && document.getElementById('real-data-only').checked;
+        const endpoint = realDataOnly ? '/api/analyze-real-only' : '/api/analyze';
+        
         try {
-            const response = await fetch('/api/analyze', {
+            const response = await fetch(endpoint, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -289,6 +293,11 @@ class OptionsAnalysisDashboard {
                 this.displayResults(result.results, result.summary);
                 this.updateSummaryCards(result.results);
                 this.enableActionButtons();
+                
+                // Show data quality indicator
+                if (result.data_quality === 'REAL_ONLY') {
+                    this.showAlert('Analysis completed with REAL DATA ONLY - all estimated values filtered out', 'success');
+                }
             } else {
                 this.showAlert('Analysis error: ' + result.error, 'danger');
             }
@@ -564,6 +573,9 @@ class OptionsAnalysisDashboard {
     }
     
     formatVolume(option) {
+        if (option.volume === null || option.volume_source === 'NONE') {
+            return `<span class="badge bg-dark" title="Real data only mode - volume excluded">N/A</span>`;
+        }
         const badge = option.volume_source === 'REAL' ? 
             `<span class="badge bg-success" title="Real volume data">${option.volume.toLocaleString()}</span>` :
             `<span class="badge bg-secondary" title="Estimated from OI">${option.volume.toLocaleString()}</span>`;

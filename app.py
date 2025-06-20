@@ -124,6 +124,120 @@ def analyze_options():
             'error': error_msg
         }), 400
 
+@app.route('/api/analyze-real-only', methods=['POST'])
+def analyze_options_real_only():
+    """
+    Options analysis endpoint - REAL DATA ONLY
+    Filters out all estimated values and only returns contracts with real market data
+    """
+    try:
+        data = request.get_json()
+        if not data:
+            raise ValueError("No JSON data received")
+        
+        # Extract parameters with validation
+        underlying = data.get('underlying', 'SPY')
+        current_price = data.get('current_price')
+        dte = data.get('dte', 7)
+        iv = data.get('iv', 15)  # Expecting percentage
+        risk_free_rate = data.get('risk_free_rate', 4.4)  # Expecting percentage
+        
+        print(f"📈 REAL DATA ONLY - Parameters: {underlying}, Price: {current_price}, DTE: {dte}, IV: {iv}%, RFR: {risk_free_rate}%")
+        
+        # Convert and validate parameters
+        try:
+            if current_price is not None and current_price != '':
+                current_price = float(current_price)
+            else:
+                current_price = 0
+            dte = int(dte)
+            iv = float(iv) / 100.0  # Convert percentage to decimal
+            risk_free_rate = float(risk_free_rate) / 100.0  # Convert percentage to decimal
+        except (ValueError, TypeError) as e:
+            raise ValueError(f"Invalid parameter format: {e}")
+        
+        # Validate ranges
+        if dte <= 0 or dte > 365:
+            raise ValueError(f"DTE must be between 1 and 365 days, got {dte}")
+        if iv <= 0 or iv > 5:
+            raise ValueError(f"IV must be between 0.1% and 500%, got {iv*100}%")
+        if risk_free_rate < 0 or risk_free_rate > 0.5:
+            raise ValueError(f"Risk-free rate must be between 0% and 50%, got {risk_free_rate*100}%")
+        
+        # Use the hybrid system for real data only
+        from polygon_options_hybrid import PolygonOptionsHybrid
+        hybrid = PolygonOptionsHybrid()
+        
+        # Get real data only options chain
+        chain_data = hybrid.get_real_data_only_chain(underlying, dte, iv, risk_free_rate)
+        
+        if not chain_data or not chain_data.get('contracts'):
+            raise ValueError(f"No real data available for {underlying} with {dte} DTE")
+        
+        contracts = chain_data['contracts']
+        print(f"✅ REAL DATA ONLY analysis complete - {len(contracts)} options with real data")
+        
+        # Add enhanced scoring to each contract
+        analyzer = get_analyzer(underlying)
+        for contract in contracts:
+            # Calculate day trading score
+            contract['day_trade_score'] = analyzer.calculate_enhanced_day_trade_score(
+                contract['delta'], contract['theoretical_price'], 
+                contract.get('open_interest', 0), contract.get('volume') or 0,
+                contract['liquidity_score']
+            )
+            
+            # Add probability metrics
+            contract['prob_itm'] = abs(contract['delta'])
+            contract['risk_reward_ratio'] = abs(contract['delta']) / max(contract['theoretical_price'], 0.01)
+            
+            # Format contract data for consistency
+            contract['premium'] = contract['theoretical_price']
+            contract['type'] = contract['type'].upper()
+        
+        # Separate calls and puts
+        calls = [c for c in contracts if c['type'] == 'CALL']
+        puts = [c for c in contracts if c['type'] == 'PUT']
+        
+        # Sort by score
+        calls.sort(key=lambda x: x['day_trade_score'], reverse=True)
+        puts.sort(key=lambda x: x['day_trade_score'], reverse=True)
+        
+        # Create summary
+        summary = {
+            'total_contracts': len(contracts),
+            'calls_count': len(calls),
+            'puts_count': len(puts),
+            'data_quality': 'REAL_ONLY',
+            'best_call_score': max([c['day_trade_score'] for c in calls]) if calls else 0,
+            'best_put_score': max([p['day_trade_score'] for p in puts]) if puts else 0,
+            'avg_liquidity_score': sum([c['liquidity_score'] for c in contracts]) / len(contracts),
+            'stock_price': chain_data['stock_price'],
+            'underlying': underlying,
+            'dte': dte,
+            'iv_used': chain_data['iv_used'],
+            'notes': chain_data.get('notes', '')
+        }
+        
+        return jsonify({
+            'success': True,
+            'results': contracts,
+            'summary': summary,
+            'timestamp': datetime.now().isoformat(),
+            'data_quality': 'REAL_ONLY'
+        })
+        
+    except Exception as e:
+        error_msg = str(e)
+        print(f"❌ REAL DATA ONLY analysis error: {error_msg}")
+        import traceback
+        traceback.print_exc()
+        
+        return jsonify({
+            'success': False,
+            'error': error_msg
+        }), 400
+
 @app.route('/api/live-price/<symbol>')
 def get_live_price(symbol):
     """Get live price from Polygon.io"""

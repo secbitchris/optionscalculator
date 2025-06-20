@@ -256,6 +256,155 @@ class PolygonOptionsHybrid:
             'total_contracts': len(enhanced_chain)
         }
     
+    def get_real_data_only_chain(self, underlying, dte=7, iv=None, r=0.044):
+        """
+        Get options chain with REAL DATA ONLY - works directly with real market data
+        
+        Returns only contracts that have:
+        - Real open interest from Polygon.io
+        - Real underlying price
+        - Theoretical pricing (since live option quotes require premium subscription)
+        
+        Volume is excluded since it requires paid subscription
+        """
+        print(f"🔄 Getting REAL DATA ONLY options chain for {underlying}...")
+        
+        # Get live stock price
+        stock_price = self.get_live_stock_price(underlying)
+        if not stock_price:
+            print(f"❌ Could not get live price for {underlying}")
+            return {}
+        
+        print(f"📈 Live {underlying} price: ${stock_price}")
+        
+        # Get real market IV if not provided
+        if iv is None:
+            iv = self.get_market_iv(underlying)
+            print(f"📊 Using market IV: {iv:.1%}")
+        else:
+            print(f"📊 Using provided IV: {iv:.1%}")
+        
+        # Get real open interest data first
+        real_oi_data = self.get_real_open_interest(underlying)
+        if not real_oi_data:
+            print(f"❌ No real open interest data available")
+            return {}
+        
+        print(f"✅ Found REAL open interest for {len(real_oi_data)} contracts")
+        
+        # Show what real OI data we have
+        print(f"🔍 Available real OI contracts:")
+        for key, oi_info in list(real_oi_data.items())[:5]:  # Show first 5
+            print(f"   {oi_info['type'].upper()} ${oi_info['strike']} exp:{oi_info['expiry']} OI:{oi_info['open_interest']}")
+        
+        # Work directly with the real OI data instead of synthetic contracts
+        real_contracts = []
+        
+        for key, oi_info in real_oi_data.items():
+            try:
+                strike = oi_info['strike']
+                contract_type = oi_info['type'].lower()
+                expiry = oi_info['expiry']
+                open_interest = oi_info['open_interest']
+                
+                # Calculate DTE from expiry
+                from datetime import datetime
+                try:
+                    exp_date = datetime.strptime(expiry, '%Y-%m-%d')
+                    current_date = datetime.now()
+                    contract_dte = (exp_date - current_date).days
+                except:
+                    contract_dte = dte  # Fallback to requested DTE
+                
+                # Filter by DTE (allow more flexibility for real data)
+                # Accept 0-DTE options too since they're actively traded
+                if dte <= 14:
+                    acceptable_range = (0, 21)  # 0-3 weeks (includes same-day expiry)
+                elif dte <= 45:
+                    acceptable_range = (0, 60)  # 0-8 weeks 
+                else:
+                    acceptable_range = (0, 365)  # Any expiry
+                
+                if not (acceptable_range[0] <= contract_dte <= acceptable_range[1]):
+                    print(f"   Skipping {contract_type.upper()} ${strike} - DTE {contract_dte} outside range {acceptable_range}")
+                    continue
+                
+                print(f"   Including {contract_type.upper()} ${strike} - DTE {contract_dte}, OI {open_interest}")
+                
+                # Calculate theoretical price and Greeks
+                T = contract_dte / 252
+                theo_price = self.black_scholes_price(stock_price, strike, T, r, iv, contract_type)
+                greeks = self.calculate_greeks(stock_price, strike, T, r, iv, contract_type)
+                
+                # Calculate liquidity score
+                if contract_type == 'call':
+                    moneyness = strike / stock_price
+                else:
+                    moneyness = stock_price / strike
+                
+                atm_factor = max(0.1, 1 - abs(moneyness - 1) * 2)
+                
+                if 7 <= contract_dte <= 45:
+                    dte_factor = 1.0
+                elif contract_dte < 7:
+                    dte_factor = 0.3 + (contract_dte / 7) * 0.7
+                else:
+                    dte_factor = max(0.1, 1 - (contract_dte - 45) / 60)
+                
+                liquidity_score = atm_factor * dte_factor
+                
+                # Estimate bid/ask spread based on liquidity
+                spread_info = self.estimate_bid_ask_spread(theo_price, liquidity_score)
+                
+                enhanced_contract = {
+                    'ticker': f"O:{underlying}{expiry.replace('-', '')}{contract_type[0].upper()}{int(strike*1000):08d}",
+                    'type': contract_type.upper(),
+                    'strike': strike,
+                    'expiration': expiry,
+                    'dte': contract_dte,
+                    'theoretical_price': theo_price,
+                    'bid': spread_info['bid'],
+                    'ask': spread_info['ask'],
+                    'mid': theo_price,
+                    'spread': spread_info['spread'],
+                    'spread_pct': spread_info['spread_pct'],
+                    'delta': greeks['delta'],
+                    'gamma': greeks['gamma'],
+                    'theta': greeks['theta'],
+                    'vega': greeks['vega'],
+                    'iv_used': iv * 100,
+                    'open_interest': open_interest,
+                    'oi_source': "REAL",  # Always real since we're using real OI data
+                    'volume': None,  # No real volume data without premium subscription
+                    'volume_source': "NONE",
+                    'liquidity_score': round(liquidity_score, 3),
+                    'liquidity_tier': self._get_liquidity_tier(liquidity_score),
+                    'confidence': "HIGH"
+                }
+                
+                real_contracts.append(enhanced_contract)
+                
+            except Exception as e:
+                print(f"❌ Error processing real contract {key}: {e}")
+                continue
+        
+        # Sort by strike price
+        real_contracts.sort(key=lambda x: x['strike'])
+        
+        print(f"✅ Created {len(real_contracts)} contracts with REAL data only")
+        
+        return {
+            'underlying': underlying,
+            'stock_price': stock_price,
+            'dte': dte,
+            'iv_used': iv * 100,
+            'risk_free_rate': r * 100,
+            'contracts': real_contracts,
+            'total_contracts': len(real_contracts),
+            'data_quality': 'REAL_ONLY',
+            'notes': 'Built directly from real open interest data. Volume excluded (requires premium subscription).'
+        }
+    
     def get_market_iv(self, symbol='SPY'):
         """
         Get real market implied volatility from available sources
@@ -400,13 +549,16 @@ class PolygonOptionsHybrid:
             print(f"❌ Error getting real OI data: {e}")
             return {}
 
-    def get_liquidity_metrics(self, S, K, dte, option_type='call', underlying='SPY', real_oi_data=None):
+    def get_liquidity_metrics(self, S, K, dte, option_type='call', underlying='SPY', real_oi_data=None, real_data_only=False):
         """
         HYBRID: Use REAL Open Interest + estimate volume
         
         NEW: Your API can get real OI data! This combines:
         ✅ REAL Open Interest from Polygon.io
         📊 Estimated Volume (requires paid subscription)
+        
+        Args:
+            real_data_only (bool): If True, only return contracts with real OI data
         """
         # Get real OI data if not provided
         if real_oi_data is None:
@@ -419,6 +571,10 @@ class PolygonOptionsHybrid:
                 oi_info['type'] == option_type):
                 real_oi = oi_info['open_interest']
                 break
+        
+        # If real_data_only is True and we don't have real OI, return None
+        if real_data_only and real_oi is None:
+            return None
         
         # Calculate liquidity factors for volume estimation
         if option_type == 'call':
@@ -440,13 +596,13 @@ class PolygonOptionsHybrid:
         # Composite liquidity score
         liquidity_score = atm_factor * dte_factor
         
-        # Use real OI if available, otherwise estimate
+        # Use real OI if available, otherwise estimate (unless real_data_only is True)
         if real_oi is not None:
             open_interest = real_oi
             oi_source = "REAL"
             confidence = "HIGH"
         else:
-            # Fallback to estimation
+            # Fallback to estimation (only if real_data_only is False)
             if liquidity_score > 0.8:
                 open_interest = np.random.randint(1000, 5000)
             elif liquidity_score > 0.5:
@@ -456,22 +612,28 @@ class PolygonOptionsHybrid:
             oi_source = "ESTIMATED"
             confidence = "MEDIUM"
         
-        # Always estimate volume (needs paid subscription)
-        if open_interest > 0:
-            # Volume typically 5-15% of OI per day
-            volume_ratio = 0.05 + liquidity_score * 0.10
-            estimated_volume = int(open_interest * volume_ratio)
-            # Add some randomness
-            estimated_volume = int(estimated_volume * (0.5 + np.random.random()))
+        # For real_data_only mode, set volume to None since we don't have real volume
+        if real_data_only:
+            volume = None
+            volume_source = "NONE"
         else:
-            estimated_volume = 0
+            # Always estimate volume (needs paid subscription)
+            if open_interest > 0:
+                # Volume typically 5-15% of OI per day
+                volume_ratio = 0.05 + liquidity_score * 0.10
+                volume = int(open_interest * volume_ratio)
+                # Add some randomness
+                volume = int(volume * (0.5 + np.random.random()))
+            else:
+                volume = 0
+            volume_source = "ESTIMATED"
         
         return {
             'open_interest': open_interest,
-            'volume': estimated_volume,
+            'volume': volume,
             'liquidity_score': round(liquidity_score, 3),
             'oi_source': oi_source,
-            'volume_source': "ESTIMATED",
+            'volume_source': volume_source,
             'confidence': confidence,
             'liquidity_tier': self._get_liquidity_tier(liquidity_score)
         }
