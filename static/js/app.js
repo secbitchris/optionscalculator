@@ -276,11 +276,12 @@ class OptionsAnalysisDashboard {
             risk_free_rate: parseFloat(formData.get('risk_free_rate')) // Keep as percentage - backend will convert
         };
         
-        // Check if real-data-only mode is enabled
-        const realDataOnly = document.getElementById('real-data-only') && document.getElementById('real-data-only').checked;
-        const endpoint = realDataOnly ? '/api/analyze-real-only' : '/api/analyze';
+        // Always use the main endpoint (now uses real data by default)
+        const endpoint = '/api/analyze';
         
         try {
+            console.log('🔄 Sending analysis request:', data);
+            
             const response = await fetch(endpoint, {
                 method: 'POST',
                 headers: {
@@ -289,9 +290,13 @@ class OptionsAnalysisDashboard {
                 body: JSON.stringify(data)
             });
             
+            console.log('📡 Response status:', response.status);
+            
             const result = await response.json();
+            console.log('📊 Analysis result:', result);
             
             if (result.success) {
+                console.log('✅ Analysis successful, displaying results...');
                 this.currentResults = result.results;
                 this.currentSummary = result.summary;
                 this.displayResults(result.results, result.summary);
@@ -299,25 +304,26 @@ class OptionsAnalysisDashboard {
                 this.enableActionButtons();
                 
                 // Show data quality indicator
-                if (result.data_quality === 'REAL_ONLY') {
-                    this.showAlert('Analysis completed with REAL DATA ONLY - all estimated values filtered out', 'success');
+                if (result.data_quality === 'REAL_DATA_15MIN_DELAY') {
+                    this.showAlert('Analysis completed with REAL MARKET DATA (15-minute delay) - no estimated values', 'success');
                 }
             } else {
-                // Enhanced error message for real-data-only mode
-                if (realDataOnly && result.error.includes('Available DTEs:')) {
+                console.error('❌ Analysis failed:', result.error);
+                // Enhanced error message for real data mode
+                if (result.error.includes('Available DTEs:')) {
                     const match = result.error.match(/Available DTEs: \[(.*?)\]/);
                     if (match) {
                         const availableDTEs = match[1];
-                        this.showAlert(`Real Data Only Mode: No contracts found for ${data.dte} DTE. Available DTEs: ${availableDTEs}. Try one of these DTE values.`, 'warning');
+                        this.showAlert(`Real Market Data: No contracts found for ${data.dte} DTE. Available DTEs: ${availableDTEs}. Try one of these DTE values.`, 'warning');
                     } else {
-                        this.showAlert('Real Data Only Mode - ' + result.error, 'warning');
+                        this.showAlert('Real Market Data - ' + result.error, 'warning');
                     }
                 } else {
                     this.showAlert('Analysis error: ' + result.error, 'danger');
                 }
             }
         } catch (error) {
-            console.error('Error running analysis:', error);
+            console.error('❌ Network error running analysis:', error);
             this.showAlert('Network error during analysis', 'danger');
         } finally {
             this.showLoading(false);
@@ -325,12 +331,14 @@ class OptionsAnalysisDashboard {
     }
     
     displayResults(results, summary) {
-        // Store current price for ATM detection
-        const currentPrice = parseFloat(document.getElementById('current_price').value);
+        // Get current price from summary (more reliable) or fallback to form input
+        const currentPrice = summary.stock_price || parseFloat(document.getElementById('current_price').value) || 595;
         
         // Separate calls and puts
         const calls = results.filter(r => r.type === 'CALL').sort((a, b) => a.strike - b.strike);
         const puts = results.filter(r => r.type === 'PUT').sort((a, b) => a.strike - b.strike);
+        
+        console.log(`📊 Display Results: ${results.length} total, ${calls.length} calls, ${puts.length} puts, current price: $${currentPrice}`);
         
         // Store for view switching and sorting
         this.callsData = calls;
@@ -423,7 +431,7 @@ class OptionsAnalysisDashboard {
                 <td>${this.formatOI(call)}</td>
                 <td>${this.formatVolume(call)}</td>
                 <td>${this.formatScore(call.day_trade_score)}</td>
-                <td>${call.aggressive_rr.toFixed(3)}</td>
+                <td>${(call.risk_reward_ratio || 0).toFixed(3)}</td>
                 <td>${(call.prob_itm * 100).toFixed(1)}%</td>
             `;
             
@@ -448,7 +456,7 @@ class OptionsAnalysisDashboard {
                 <td>${this.formatOI(put)}</td>
                 <td>${this.formatVolume(put)}</td>
                 <td>${this.formatScore(put.day_trade_score)}</td>
-                <td>${put.aggressive_rr.toFixed(3)}</td>
+                <td>${(put.risk_reward_ratio || 0).toFixed(3)}</td>
                 <td>${(put.prob_itm * 100).toFixed(1)}%</td>
             `;
             
@@ -527,7 +535,7 @@ class OptionsAnalysisDashboard {
                     return (a, b) => (a.day_trade_score - b.day_trade_score) * multiplier;
                 case 'rr_ratio':
                 case 'aggressive_rr':
-                    return (a, b) => ((a.aggressive_rr || 0) - (b.aggressive_rr || 0)) * multiplier;
+                    return (a, b) => ((a.risk_reward_ratio || 0) - (b.risk_reward_ratio || 0)) * multiplier;
                 case 'prob_itm':
                     return (a, b) => ((a.prob_itm || 0) - (b.prob_itm || 0)) * multiplier;
                 default:

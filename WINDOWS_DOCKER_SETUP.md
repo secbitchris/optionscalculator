@@ -32,8 +32,8 @@ Complete guide to running the Options Analysis Web Application on Windows using 
    ```
 
 ### Step 4: Access the Application
-- Web Interface: http://localhost:5001
-- API Documentation: http://localhost:5001/api/docs
+- Web Interface: http://localhost:5002
+- Features: Real market data, intelligent strike filtering, rate limiting
 
 ## 📋 Detailed Setup Instructions
 
@@ -126,7 +126,7 @@ docker build -t options-analysis .
 # Run the container
 docker run -d `
   --name options-analysis-app `
-  -p 5001:5001 `
+  -p 5002:5002 `
   -v ${PWD}/data:/app/data `
   --env-file .env `
   options-analysis
@@ -164,6 +164,12 @@ The application uses Docker volumes to persist data:
 - Analysis results and cached data are saved locally
 - Data survives container restarts
 
+### New Features (v3.0)
+- **Real Market Data**: Live SPY prices and open interest from Polygon.io (15-minute delay)
+- **Strike Filtering**: Only analyzes strikes within ±40 points of current price (160 vs 500+ contracts)
+- **Rate Limiting**: 12-second intervals between API calls with 5-minute caching
+- **Production Ready**: Containerized deployment with comprehensive monitoring
+
 ## 🐛 Troubleshooting
 
 ### Common Issues
@@ -181,17 +187,17 @@ Enable-WindowsOptionalFeature -Online -FeatureName VirtualMachinePlatform
 # Restart computer
 ```
 
-#### 2. "Port 5001 is already in use"
+#### 2. "Port 5002 is already in use"
 **Solution:**
 ```powershell
 # Find what's using the port
-netstat -ano | findstr :5001
+netstat -ano | findstr :5002
 
 # Kill the process (replace PID with actual process ID)
 taskkill /PID 1234 /F
 
 # Or use a different port
-.\docker-deploy.ps1 build -p 5002
+.\docker-deploy.ps1 build -p 5003
 ```
 
 #### 3. "Access denied" or Permission Errors

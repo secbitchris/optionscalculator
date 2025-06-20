@@ -12,12 +12,14 @@ python run_webapp.py
 
 ### 2. Open Your Browser
 
-Navigate to: **http://localhost:5000**
+Navigate to: **http://localhost:5002**
 
 ## 🎯 Features
 
 ### **Main Dashboard**
-- **Live Price Fetching**: Real-time SPY/SPX prices from Polygon.io
+- **Real Market Data**: Live SPY/SPX prices from Polygon.io with 15-minute delay
+- **Intelligent Strike Filtering**: Only shows strikes within ±40 points of current price (160 contracts vs 500+)
+- **Rate Limited API Integration**: 12-second intervals with 5-minute caching for efficiency
 - **Parameter Configuration**: Underlying, DTE, IV, Risk-free rate
 - **Instant Analysis**: Click "Analyze Options" for comprehensive results
 - **Beautiful Results Table**: Color-coded scores, sortable columns

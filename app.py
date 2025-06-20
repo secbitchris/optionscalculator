@@ -40,7 +40,7 @@ def index():
 
 @app.route('/api/analyze', methods=['POST'])
 def analyze_options():
-    """Main options analysis endpoint"""
+    """Main options analysis endpoint - NOW USES REAL DATA BY DEFAULT"""
     try:
         data = request.get_json()
         print(f"📊 Received analysis request: {data}")
@@ -56,7 +56,7 @@ def analyze_options():
         iv = data.get('iv', 15)  # Expecting percentage
         risk_free_rate = data.get('risk_free_rate', 4.4)  # Expecting percentage
         
-        print(f"📈 Parameters - Underlying: {underlying}, Price: {current_price}, DTE: {dte}, IV: {iv}%, RFR: {risk_free_rate}%")
+        print(f"📈 REAL DATA (15min delay) - Parameters: {underlying}, Price: {current_price}, DTE: {dte}, IV: {iv}%, RFR: {risk_free_rate}%")
         
         # Convert and validate parameters
         try:
@@ -78,44 +78,74 @@ def analyze_options():
         if risk_free_rate < 0 or risk_free_rate > 0.5:
             raise ValueError(f"Risk-free rate must be between 0% and 50%, got {risk_free_rate*100}%")
         
-        # Get analyzer
+        # Use the hybrid system for real data
+        from polygon_options_hybrid import PolygonOptionsHybrid
+        hybrid = PolygonOptionsHybrid()
+        
+        # Get real data only options chain
+        chain_data = hybrid.get_real_data_only_chain(underlying, dte, iv, risk_free_rate)
+        
+        if not chain_data or not chain_data.get('contracts'):
+            raise ValueError(f"No real data available for {underlying} with {dte} DTE")
+        
+        contracts = chain_data['contracts']
+        print(f"✅ REAL DATA analysis complete - {len(contracts)} options with real data (15min delay)")
+        
+        # Add enhanced scoring to each contract
         analyzer = get_analyzer(underlying)
-        print(f"✅ Got analyzer for {underlying}")
+        for contract in contracts:
+            # Calculate simplified day trading score for real-data mode
+            # This score combines delta exposure, affordability, and liquidity
+            delta_factor = abs(contract['delta']) * 0.4  # Delta exposure weight
+            affordability_factor = (1 / (contract['theoretical_price'] + 0.01)) * 0.3  # Affordability weight
+            liquidity_factor = contract['liquidity_score'] * 0.3  # Liquidity weight
+            
+            contract['day_trade_score'] = delta_factor + affordability_factor + liquidity_factor
+            
+            # Add probability metrics
+            contract['prob_itm'] = abs(contract['delta'])
+            contract['risk_reward_ratio'] = abs(contract['delta']) / max(contract['theoretical_price'], 0.01)
+            
+            # Format contract data for consistency
+            contract['premium'] = contract['theoretical_price']
+            contract['type'] = contract['type'].upper()
+            contract['option_type'] = contract['type']  # Add option_type field for frontend compatibility
         
-        # Update configuration if needed
-        if current_price > 0:
-            analyzer.update_config(current_price=current_price)
-            print(f"📊 Updated price to ${current_price}")
+        # Separate calls and puts
+        calls = [c for c in contracts if c['type'] == 'CALL']
+        puts = [c for c in contracts if c['type'] == 'PUT']
         
-        # Get the actual price to use
-        analysis_price = current_price if current_price > 0 else analyzer.get_current_price()
-        print(f"💰 Using price: ${analysis_price}")
+        # Sort by score
+        calls.sort(key=lambda x: x['day_trade_score'], reverse=True)
+        puts.sort(key=lambda x: x['day_trade_score'], reverse=True)
         
-        # Run analysis
-        print(f"🔄 Running analysis...")
-        results, summary = analyzer.analyze_options(
-            S=analysis_price,
-            T=dte/252,
-            r=risk_free_rate,
-            sigma=iv,
-            dte_days=dte
-        )
-        
-        print(f"✅ Analysis complete - {len(results)} options analyzed")
-        
-        # Convert to JSON-serializable format
-        results_dict = results.to_dict('records')
+        # Create summary
+        summary = {
+            'total_contracts': len(contracts),
+            'calls_count': len(calls),
+            'puts_count': len(puts),
+            'data_quality': 'REAL_DATA_15MIN_DELAY',
+            'best_call_score': max([c['day_trade_score'] for c in calls]) if calls else 0,
+            'best_put_score': max([p['day_trade_score'] for p in puts]) if puts else 0,
+            'avg_liquidity_score': sum([c['liquidity_score'] for c in contracts]) / len(contracts),
+            'stock_price': chain_data['stock_price'],
+            'underlying': underlying,
+            'dte': dte,
+            'iv_used': chain_data['iv_used'],
+            'notes': 'Real market data with 15-minute delay. Volume excluded (requires premium subscription).'
+        }
         
         return jsonify({
             'success': True,
-            'results': results_dict,
+            'results': contracts,
             'summary': summary,
-            'timestamp': datetime.now().isoformat()
+            'timestamp': datetime.now().isoformat(),
+            'data_quality': 'REAL_DATA_15MIN_DELAY'
         })
         
     except Exception as e:
         error_msg = str(e)
-        print(f"❌ Analysis error: {error_msg}")
+        print(f"❌ REAL DATA analysis error: {error_msg}")
         import traceback
         traceback.print_exc()
         
@@ -195,6 +225,7 @@ def analyze_options_real_only():
             # Format contract data for consistency
             contract['premium'] = contract['theoretical_price']
             contract['type'] = contract['type'].upper()
+            contract['option_type'] = contract['type']  # Add option_type field for frontend compatibility
         
         # Separate calls and puts
         calls = [c for c in contracts if c['type'] == 'CALL']

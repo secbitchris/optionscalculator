@@ -4,6 +4,21 @@ Cross-platform installation guide for Windows, macOS, and Linux.
 
 ## 🎯 Quick Setup (All Platforms)
 
+### 🐳 **Docker Deployment (Recommended)**
+```bash
+# 1. Clone the repository
+git clone https://github.com/secbitchris/optionscalculator.git
+cd optionscalculator
+
+# 2. Deploy with Docker (includes all dependencies)
+docker-compose up --build -d
+
+# 3. Open browser
+# Navigate to: http://localhost:5002
+# Features: Real market data, 40-point strike filtering, rate limiting
+```
+
+### 🐍 **Python Development Setup**
 ```bash
 # 1. Clone the repository
 git clone https://github.com/secbitchris/optionscalculator.git
@@ -12,14 +27,18 @@ cd optionscalculator
 # 2. Install dependencies
 pip install -r requirements.txt
 
-# 3. Test installation
+# 3. Set up environment (optional - for real market data)
+cp env_template.txt .env
+# Edit .env and add your Polygon.io API key
+
+# 4. Test installation
 python test_installation.py
 
-# 4. Start web application
-python run_webapp.py --port 5001
+# 5. Start web application
+python run_webapp.py --port 5002
 
-# 5. Open browser
-# Navigate to: http://localhost:5001
+# 6. Open browser
+# Navigate to: http://localhost:5002
 ```
 
 ## 🖥️ Platform-Specific Instructions

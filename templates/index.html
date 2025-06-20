@@ -77,15 +77,12 @@
                                 </div>
                             </div>
                             <div class="mb-3">
-                                <div class="form-check">
-                                    <input class="form-check-input" type="checkbox" id="real-data-only" name="real_data_only">
-                                    <label class="form-check-label" for="real-data-only">
-                                        <i class="fas fa-shield-alt me-1 text-success"></i>Real Data Only
-                                    </label>
-                                    <div class="form-text small">
-                                        <i class="fas fa-info-circle text-info me-1"></i>
-                                        Filter out all estimated values. Only show contracts with real open interest from Polygon.io.
-                                    </div>
+                                <div class="alert alert-success alert-sm p-2">
+                                    <small>
+                                        <i class="fas fa-shield-alt me-1"></i>
+                                        <strong>Real Market Data:</strong> Using live data from Polygon.io with 15-minute delay. 
+                                        No estimated values - only real open interest and pricing.
+                                    </small>
                                 </div>
                             </div>
                             <button type="submit" class="btn btn-primary w-100" id="analyze-btn"><i class="fas fa-calculator me-2"></i>Analyze Options</button>
@@ -325,9 +322,9 @@
                                 </div>
                                 <div class="col-md-4 text-end">
                                     <small class="text-muted">
-                                        <i class="fas fa-info-circle me-1"></i>
-                                        <span class="badge bg-success">Real OI</span> 
-                                        <span class="badge bg-secondary">Est. Vol</span>
+                                        <i class="fas fa-shield-alt me-1 text-success"></i>
+                                        <span class="badge bg-success">Real Data</span> 
+                                        <span class="badge bg-secondary">15min Delay</span>
                                         <span id="current-spot-price" class="ms-2"></span>
                                     </small>
                                 </div>

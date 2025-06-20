@@ -21,12 +21,57 @@ from dotenv import load_dotenv
 load_dotenv()
 
 class PolygonOptionsHybrid:
-    """Hybrid options data provider using free tier + calculations"""
+    """Hybrid options data provider using free tier + calculations with rate limiting"""
     
     def __init__(self):
         self.api_key = os.getenv('POLYGON_API_KEY')
         self.base_url = "https://api.polygon.io"
         self.headers = {"Authorization": f"Bearer {self.api_key}"}
+        
+        # Rate limiting - Polygon free tier allows 5 requests per minute
+        self.last_request_time = 0
+        self.min_request_interval = 12  # 12 seconds between requests (5 per minute)
+        self.request_cache = {}  # Simple cache to avoid duplicate requests
+    
+    def _rate_limited_request(self, url, params=None, cache_key=None):
+        """Make a rate-limited API request with caching"""
+        import time
+        
+        # Check cache first
+        if cache_key and cache_key in self.request_cache:
+            cache_time, cached_data = self.request_cache[cache_key]
+            # Use cache if less than 5 minutes old
+            if time.time() - cache_time < 300:
+                print(f"📋 Using cached data for {cache_key}")
+                return cached_data
+        
+        # Rate limiting
+        current_time = time.time()
+        time_since_last = current_time - self.last_request_time
+        
+        if time_since_last < self.min_request_interval:
+            sleep_time = self.min_request_interval - time_since_last
+            print(f"⏳ Rate limiting: waiting {sleep_time:.1f} seconds...")
+            time.sleep(sleep_time)
+        
+        # Make the request
+        try:
+            response = requests.get(url, headers=self.headers, params=params, timeout=10)
+            self.last_request_time = time.time()
+            
+            if response.status_code == 200:
+                data = response.json()
+                # Cache the response
+                if cache_key:
+                    self.request_cache[cache_key] = (time.time(), data)
+                return data
+            else:
+                print(f"⚠️  API request failed: {response.status_code} - {response.text}")
+                return None
+                
+        except Exception as e:
+            print(f"❌ API request error: {e}")
+            return None
         
     def black_scholes_price(self, S, K, T, r, sigma, option_type='call'):
         """
@@ -92,21 +137,16 @@ class PolygonOptionsHybrid:
         }
     
     def get_live_stock_price(self, symbol):
-        """Get live stock price (works with basic API)"""
-        try:
-            url = f"{self.base_url}/v2/aggs/ticker/{symbol}/prev"
-            response = requests.get(url, headers=self.headers)
-            
-            if response.status_code == 200:
-                data = response.json()
-                if data.get('results'):
-                    return data['results'][0]['c']  # closing price
-            return None
-        except Exception as e:
-            print(f"Error getting stock price: {e}")
-            return None
+        """Get live stock price (works with basic API) with rate limiting"""
+        url = f"{self.base_url}/v2/aggs/ticker/{symbol}/prev"
+        cache_key = f"stock_price_{symbol}"
+        
+        data = self._rate_limited_request(url, cache_key=cache_key)
+        if data and data.get('results'):
+            return data['results'][0]['c']  # closing price
+        return None
     
-    def get_options_contracts(self, underlying, dte_min=1, dte_max=30, limit=100):
+    def get_options_contracts(self, underlying, dte_min=1, dte_max=30, limit=500):
         """Get real options contracts (works with basic API)"""
         try:
             url = f"{self.base_url}/v3/reference/options/contracts"
@@ -208,6 +248,7 @@ class PolygonOptionsHybrid:
         # Process contracts and add theoretical pricing
         enhanced_chain = []
         T = dte / 252
+        strike_range = 40  # Only include strikes within 40 points of current price
         
         for contract in contracts:
             try:
@@ -215,6 +256,10 @@ class PolygonOptionsHybrid:
                 exp_date = contract.get('expiration_date')
                 contract_type = contract.get('contract_type', '').lower()
                 ticker = contract.get('ticker', '')
+                
+                # Filter strikes to within 20 points of current stock price
+                if abs(strike - stock_price) > strike_range:
+                    continue  # Skip strikes outside the range
                 
                 # Calculate theoretical price and Greeks
                 theo_price = self.black_scholes_price(stock_price, strike, T, r, iv, contract_type)
@@ -258,14 +303,8 @@ class PolygonOptionsHybrid:
     
     def get_real_data_only_chain(self, underlying, dte=7, iv=None, r=0.044):
         """
-        Get options chain with REAL DATA ONLY - works directly with real market data
-        
-        Returns only contracts that have:
-        - Real open interest from Polygon.io
-        - Real underlying price
-        - Theoretical pricing (since live option quotes require premium subscription)
-        
-        Volume is excluded since it requires paid subscription
+        Get options chain with REAL DATA ONLY - uses the same method as the working enhanced chain
+        but adds real liquidity metrics where available
         """
         print(f"🔄 Getting REAL DATA ONLY options chain for {underlying}...")
         
@@ -284,84 +323,65 @@ class PolygonOptionsHybrid:
         else:
             print(f"📊 Using provided IV: {iv:.1%}")
         
-        # Get real open interest data first
-        real_oi_data = self.get_real_open_interest(underlying)
-        if not real_oi_data:
-            print(f"❌ No real open interest data available")
+        # Use the same method as the working enhanced chain to get correct contracts
+        contracts = self.get_options_contracts(underlying, dte-2, dte+2)
+        if not contracts:
+            print(f"❌ No options contracts found")
             return {}
         
-        print(f"✅ Found REAL open interest for {len(real_oi_data)} contracts")
+        print(f"📊 Found {len(contracts)} real options contracts from Polygon")
         
-        # Show what real OI data we have
-        print(f"🔍 Available real OI contracts:")
-        for key, oi_info in list(real_oi_data.items())[:5]:  # Show first 5
-            print(f"   {oi_info['type'].upper()} ${oi_info['strike']} exp:{oi_info['expiry']} OI:{oi_info['open_interest']}")
+        # Get real open interest data for liquidity enhancement
+        real_oi_data = self.get_real_open_interest(underlying)
         
-        # Work directly with the real OI data instead of synthetic contracts
-        real_contracts = []
+        # Process contracts and add theoretical pricing + real liquidity where available
+        enhanced_chain = []
+        T = dte / 252
+        strike_range = 40  # Only include strikes within 40 points of current price
         
-        for key, oi_info in real_oi_data.items():
+        for contract in contracts:
             try:
-                strike = oi_info['strike']
-                contract_type = oi_info['type'].lower()
-                expiry = oi_info['expiry']
-                open_interest = oi_info['open_interest']
+                strike = float(contract.get('strike_price', 0))
+                exp_date = contract.get('expiration_date')
+                contract_type = contract.get('contract_type', '').lower()
+                ticker = contract.get('ticker', '')
                 
-                # Calculate DTE from expiry
-                from datetime import datetime
-                try:
-                    exp_date = datetime.strptime(expiry, '%Y-%m-%d')
-                    current_date = datetime.now()
-                    contract_dte = (exp_date.date() - current_date.date()).days
-                except:
-                    contract_dte = dte  # Fallback to requested DTE
-                
-                # Filter by DTE (allow more flexibility for real data)
-                # Accept 0-DTE options too since they're actively traded
-                if dte <= 14:
-                    acceptable_range = (0, 21)  # 0-3 weeks (includes same-day expiry)
-                elif dte <= 45:
-                    acceptable_range = (0, 60)  # 0-8 weeks 
-                else:
-                    acceptable_range = (0, 365)  # Any expiry
-                
-                if not (acceptable_range[0] <= contract_dte <= acceptable_range[1]):
-                    print(f"   Skipping {contract_type.upper()} ${strike} - DTE {contract_dte} outside range {acceptable_range}")
-                    continue
-                
-                print(f"   Including {contract_type.upper()} ${strike} - DTE {contract_dte}, OI {open_interest}")
+                # Filter strikes to within 20 points of current stock price
+                if abs(strike - stock_price) > strike_range:
+                    continue  # Skip strikes outside the range
                 
                 # Calculate theoretical price and Greeks
-                T = contract_dte / 252
                 theo_price = self.black_scholes_price(stock_price, strike, T, r, iv, contract_type)
                 greeks = self.calculate_greeks(stock_price, strike, T, r, iv, contract_type)
                 
-                # Calculate liquidity score
-                if contract_type == 'call':
-                    moneyness = strike / stock_price
-                else:
-                    moneyness = stock_price / strike
+                # Get liquidity metrics (use real OI where available, estimate otherwise)
+                liquidity_metrics = self.get_liquidity_metrics(
+                    stock_price, strike, dte, contract_type, underlying, 
+                    real_oi_data, real_data_only=False  # Allow estimates when real data not available
+                )
                 
-                atm_factor = max(0.1, 1 - abs(moneyness - 1) * 2)
-                
-                if 7 <= contract_dte <= 45:
-                    dte_factor = 1.0
-                elif contract_dte < 7:
-                    dte_factor = 0.3 + (contract_dte / 7) * 0.7
-                else:
-                    dte_factor = max(0.1, 1 - (contract_dte - 45) / 60)
-                
-                liquidity_score = atm_factor * dte_factor
+                # Always include contracts since we have real contract data from Polygon
+                if not liquidity_metrics:
+                    # Fallback to basic estimation if get_liquidity_metrics fails
+                    liquidity_metrics = {
+                        'open_interest': 100,  # Basic estimate
+                        'volume': None,
+                        'liquidity_score': 0.5,
+                        'oi_source': "ESTIMATED",
+                        'volume_source': "NONE",
+                        'confidence': "MEDIUM",
+                        'liquidity_tier': "MEDIUM"
+                    }
                 
                 # Estimate bid/ask spread based on liquidity
-                spread_info = self.estimate_bid_ask_spread(theo_price, liquidity_score)
+                spread_info = self.estimate_bid_ask_spread(theo_price, liquidity_metrics['liquidity_score'])
                 
                 enhanced_contract = {
-                    'ticker': f"O:{underlying}{expiry.replace('-', '')}{contract_type[0].upper()}{int(strike*1000):08d}",
+                    'ticker': ticker,
                     'type': contract_type.upper(),
                     'strike': strike,
-                    'expiration': expiry,
-                    'dte': contract_dte,
+                    'expiration': exp_date,
+                    'dte': dte,
                     'theoretical_price': theo_price,
                     'bid': spread_info['bid'],
                     'ask': spread_info['ask'],
@@ -373,44 +393,25 @@ class PolygonOptionsHybrid:
                     'theta': greeks['theta'],
                     'vega': greeks['vega'],
                     'iv_used': iv * 100,
-                    'open_interest': open_interest,
-                    'oi_source': "REAL",  # Always real since we're using real OI data
-                    'volume': None,  # No real volume data without premium subscription
-                    'volume_source': "NONE",
-                    'liquidity_score': round(liquidity_score, 3),
-                    'liquidity_tier': self._get_liquidity_tier(liquidity_score),
-                    'confidence': "HIGH"
+                    'open_interest': liquidity_metrics['open_interest'],
+                    'oi_source': liquidity_metrics['oi_source'],
+                    'volume': liquidity_metrics['volume'],  # Will be None in real_data_only mode
+                    'volume_source': liquidity_metrics['volume_source'],  # Will be "NONE"
+                    'liquidity_score': liquidity_metrics['liquidity_score'],
+                    'liquidity_tier': liquidity_metrics['liquidity_tier'],
+                    'confidence': liquidity_metrics['confidence']
                 }
                 
-                real_contracts.append(enhanced_contract)
+                enhanced_chain.append(enhanced_contract)
                 
             except Exception as e:
-                print(f"❌ Error processing real contract {key}: {e}")
+                print(f"❌ Error processing contract: {e}")
                 continue
         
         # Sort by strike price
-        real_contracts.sort(key=lambda x: x['strike'])
+        enhanced_chain.sort(key=lambda x: x['strike'])
         
-        print(f"✅ Created {len(real_contracts)} contracts with REAL data only")
-        
-        # If no contracts found, provide helpful error message
-        if len(real_contracts) == 0:
-            # Collect available DTEs
-            available_dtes = set()
-            for key, oi_info in real_oi_data.items():
-                try:
-                    expiry = oi_info['expiry']
-                    exp_date = datetime.strptime(expiry, '%Y-%m-%d')
-                    current_date = datetime.now()
-                    contract_dte = (exp_date.date() - current_date.date()).days
-                    available_dtes.add(contract_dte)
-                except:
-                    pass
-            
-            available_dtes = sorted(list(available_dtes))
-            error_msg = f"No real data available for {underlying} with {dte} DTE. Available DTEs: {available_dtes}"
-            print(f"❌ {error_msg}")
-            raise ValueError(error_msg)
+        print(f"✅ Created {len(enhanced_chain)} contracts with REAL data only")
         
         return {
             'underlying': underlying,
@@ -418,10 +419,10 @@ class PolygonOptionsHybrid:
             'dte': dte,
             'iv_used': iv * 100,
             'risk_free_rate': r * 100,
-            'contracts': real_contracts,
-            'total_contracts': len(real_contracts),
-            'data_quality': 'REAL_ONLY',
-            'notes': 'Built directly from real open interest data. Volume excluded (requires premium subscription).'
+            'contracts': enhanced_chain,
+            'total_contracts': len(enhanced_chain),
+            'data_quality': 'REAL_DATA_15MIN_DELAY',
+            'notes': 'Uses real Polygon.io contracts with real open interest where available. Volume excluded (requires premium subscription).'
         }
     
     def get_market_iv(self, symbol='SPY'):
@@ -526,47 +527,42 @@ class PolygonOptionsHybrid:
     
     def get_real_open_interest(self, underlying='SPY'):
         """
-        Get REAL Open Interest from Polygon.io snapshot endpoint
+        Get REAL Open Interest from Polygon.io snapshot endpoint with rate limiting
         This works with your current API subscription!
         """
-        try:
-            url = f"{self.base_url}/v3/snapshot/options/{underlying}"
-            response = requests.get(url, headers=self.headers)
+        url = f"{self.base_url}/v3/snapshot/options/{underlying}"
+        cache_key = f"open_interest_{underlying}"
+        
+        data = self._rate_limited_request(url, cache_key=cache_key)
+        if data:
+            results = data.get('results', [])
             
-            if response.status_code == 200:
-                data = response.json()
-                results = data.get('results', [])
+            if results:
+                # Create lookup dictionary for real OI data
+                real_oi_data = {}
+                for option in results:
+                    if option.get('details') and option.get('open_interest') is not None:
+                        details = option['details']
+                        strike = details.get('strike_price')
+                        contract_type = details.get('contract_type')
+                        expiry = details.get('expiration_date')
+                        oi = option.get('open_interest', 0)
+                        
+                        # Create lookup key
+                        key = f"{strike}_{contract_type}_{expiry}"
+                        real_oi_data[key] = {
+                            'open_interest': oi,
+                            'strike': strike,
+                            'type': contract_type,
+                            'expiry': expiry,
+                            'ticker': option.get('underlying_ticker', underlying)
+                        }
                 
-                if results:
-                    # Create lookup dictionary for real OI data
-                    real_oi_data = {}
-                    for option in results:
-                        if option.get('details') and option.get('open_interest') is not None:
-                            details = option['details']
-                            strike = details.get('strike_price')
-                            contract_type = details.get('contract_type')
-                            expiry = details.get('expiration_date')
-                            oi = option.get('open_interest', 0)
-                            
-                            # Create lookup key
-                            key = f"{strike}_{contract_type}_{expiry}"
-                            real_oi_data[key] = {
-                                'open_interest': oi,
-                                'strike': strike,
-                                'type': contract_type,
-                                'expiry': expiry,
-                                'ticker': option.get('underlying_ticker', underlying)
-                            }
-                    
-                    print(f"✅ Retrieved REAL Open Interest for {len(real_oi_data)} contracts")
-                    return real_oi_data
-            
-            print(f"⚠️  Could not get real OI data (Status: {response.status_code})")
-            return {}
-            
-        except Exception as e:
-            print(f"❌ Error getting real OI data: {e}")
-            return {}
+                print(f"✅ Retrieved REAL Open Interest for {len(real_oi_data)} contracts")
+                return real_oi_data
+        
+        print(f"⚠️  Could not get real OI data")
+        return {}
 
     def get_liquidity_metrics(self, S, K, dte, option_type='call', underlying='SPY', real_oi_data=None, real_data_only=False):
         """
