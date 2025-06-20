@@ -307,10 +307,12 @@ class OptionsAnalysisDashboard {
         const calls = results.filter(r => r.type === 'CALL').sort((a, b) => a.strike - b.strike);
         const puts = results.filter(r => r.type === 'PUT').sort((a, b) => a.strike - b.strike);
         
-        // Store for view switching
+        // Store for view switching and sorting
         this.callsData = calls;
         this.putsData = puts;
         this.currentPrice = currentPrice;
+        this.currentResults = results;  // Store original results for sorting
+        this.currentSummary = summary;  // Store summary for re-display
         
         // Update current price display
         document.getElementById('current-spot-price').textContent = `Spot: $${currentPrice.toFixed(2)}`;
@@ -453,46 +455,52 @@ class OptionsAnalysisDashboard {
         if (!this.currentResults) return;
         
         const sortBy = document.getElementById('sort-options').value;
-        let sortedResults = [...this.currentResults];
         
-        // Apply sorting based on selected option
-        switch(sortBy) {
-            case 'day_trade_score':
-                sortedResults.sort((a, b) => b.day_trade_score - a.day_trade_score);
+        // Get sorting function
+        const getSortFunction = (sortBy) => {
+            switch(sortBy) {
+                case 'day_trade_score':
+                    return (a, b) => b.day_trade_score - a.day_trade_score;
+                case 'premium_asc':
+                    return (a, b) => a.premium - b.premium;
+                case 'premium_desc':
+                    return (a, b) => b.premium - a.premium;
+                case 'delta_desc':
+                    return (a, b) => Math.abs(b.delta) - Math.abs(a.delta);
+                case 'gamma_desc':
+                    return (a, b) => b.gamma - a.gamma;
+                case 'prob_profit':
+                    return (a, b) => (b.prob_itm || 0) - (a.prob_itm || 0);
+                case 'liquidity_score':
+                    return (a, b) => (b.liquidity_score || 0) - (a.liquidity_score || 0);
+                case 'open_interest':
+                    return (a, b) => (b.open_interest || 0) - (a.open_interest || 0);
+                case 'target_rr':
+                    return (a, b) => (b.aggressive_rr || 0) - (a.aggressive_rr || 0);
+                default:
+                    return (a, b) => b.day_trade_score - a.day_trade_score;
+            }
+        };
+        
+        const sortFunction = getSortFunction(sortBy);
+        
+        // Sort the data arrays
+        this.callsData = [...this.callsData].sort(sortFunction);
+        this.putsData = [...this.putsData].sort(sortFunction);
+        
+        // Rebuild the current view
+        const activeView = document.querySelector('input[name="options-filter"]:checked').id;
+        switch(activeView) {
+            case 'filter-all':
+                this.buildChainView(this.callsData, this.putsData, this.currentPrice);
                 break;
-            case 'premium_asc':
-                sortedResults.sort((a, b) => a.premium - b.premium);
+            case 'filter-calls':
+                this.buildCallsView(this.callsData);
                 break;
-            case 'premium_desc':
-                sortedResults.sort((a, b) => b.premium - a.premium);
+            case 'filter-puts':
+                this.buildPutsView(this.putsData);
                 break;
-            case 'delta_desc':
-                sortedResults.sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta));
-                break;
-            case 'gamma_desc':
-                sortedResults.sort((a, b) => b.gamma - a.gamma);
-                break;
-            case 'prob_profit':
-                sortedResults.sort((a, b) => b.prob_profit - a.prob_profit);
-                break;
-            case 'liquidity_score':
-                sortedResults.sort((a, b) => b.liquidity_score - a.liquidity_score);
-                break;
-            case 'open_interest':
-                sortedResults.sort((a, b) => b.open_interest - a.open_interest);
-                break;
-            case 'target_rr':
-                // Sort by target move risk/reward ratio
-                sortedResults.sort((a, b) => (b.target_move_rr || 0) - (a.target_move_rr || 0));
-                break;
-            default:
-                // Default to day_trade_score
-                sortedResults.sort((a, b) => b.day_trade_score - a.day_trade_score);
         }
-        
-        // Update current results and refresh display
-        this.currentResults = sortedResults;
-        this.displayResults(sortedResults, this.currentSummary);
     }
     
     // Helper methods for formatting
