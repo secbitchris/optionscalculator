@@ -405,4 +405,28 @@ body {
 .table-info th {
     background-color: #0dcaf0;
     border-color: #0aa2c0;
+}
+
+/* Sortable header styles */
+.sortable-header {
+    cursor: pointer;
+    user-select: none;
+    position: relative;
+    transition: all 0.2s ease;
+}
+
+.sortable-header:hover {
+    background-color: rgba(255, 255, 255, 0.1) !important;
+    transform: translateY(-1px);
+}
+
+.sortable-header:active {
+    transform: translateY(0);
+}
+
+.sort-indicator {
+    font-size: 0.8em;
+    margin-left: 4px;
+    font-weight: bold;
+    color: #007bff;
 } 

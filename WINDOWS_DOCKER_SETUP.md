@@ -1,264 +1,383 @@
 # Windows Docker Setup Guide
-## SPY/SPX Options Analysis System
 
-Complete step-by-step guide for Windows users to get the Options Analysis web application running using Docker.
+Complete guide to running the Options Analysis Web Application on Windows using Docker.
 
-## 🎯 **Why Docker?**
-- **No Python Setup Required** - Docker handles all dependencies
-- **Identical Environment** - Works exactly the same on all systems
-- **Easy Cleanup** - Completely remove with one command
-- **Professional Deployment** - Same as production systems
+## 🚀 Quick Start (5 Minutes)
 
-## 🛠️ **Prerequisites**
+### Prerequisites
+- Windows 10/11 (Home, Pro, or Enterprise)
+- Administrator access
+- 4GB+ available RAM
 
-### Step 1: Install Docker Desktop for Windows
+### Step 1: Install Docker Desktop
+1. Download Docker Desktop for Windows from [docker.com](https://www.docker.com/products/docker-desktop/)
+2. Run the installer as Administrator
+3. Follow the installation wizard (accept defaults)
+4. Restart your computer when prompted
 
-1. **Download Docker Desktop**:
-   - Go to https://www.docker.com/products/docker-desktop/
-   - Click "Download for Windows"
-   - Download `Docker Desktop Installer.exe`
+### Step 2: Start Docker Desktop
+1. Launch Docker Desktop from Start Menu
+2. Wait for Docker to start (whale icon in system tray)
+3. Accept any license agreements
 
-2. **Install Docker Desktop**:
-   - Run the installer as Administrator
-   - Follow the installation wizard
-   - **Enable WSL 2** when prompted (recommended)
-   - Restart your computer when installation completes
-
-3. **Verify Docker Installation**:
-   - Open **Command Prompt** or **PowerShell**
-   - Run: `docker --version`
-   - You should see something like: `Docker version 24.0.x`
-
-### Step 2: Install Git (if not already installed)
-
-1. **Download Git**:
-   - Go to https://git-scm.com/download/win
-   - Download and install Git for Windows
-
-2. **Verify Git Installation**:
-   - Open **Command Prompt** or **PowerShell**
-   - Run: `git --version`
-
-## 🚀 **Quick Start (5 Minutes)**
-
-### Method 1: Using PowerShell (Recommended)
-
-1. **Open PowerShell as Administrator**:
-   - Press `Windows + X`
-   - Select "Windows PowerShell (Admin)" or "Terminal (Admin)"
-
-2. **Clone and Run**:
+### Step 3: Deploy the Application
+1. Open **PowerShell as Administrator**
+2. Navigate to your project folder:
    ```powershell
-   # Navigate to your desired directory (e.g., Desktop)
-   cd $env:USERPROFILE\Desktop
-   
-   # Clone the repository
-   git clone https://github.com/secbitchris/optionscalculator.git
-   cd optionscalculator
-   
-   # Build and start the application
-   docker-compose up --build -d
+   cd C:\path\to\your\options_calculation
    ```
-
-3. **Access the Application**:
-   - Open your web browser
-   - Go to: **http://localhost:5002**
-   - You should see the Options Analysis interface!
-
-### Method 2: Using the PowerShell Deploy Script
-
-1. **Clone the Repository**:
+3. Run the deployment script:
    ```powershell
-   cd $env:USERPROFILE\Desktop
-   git clone https://github.com/secbitchris/optionscalculator.git
-   cd optionscalculator
-   ```
-
-2. **Build and Start Using PowerShell Script**:
-   ```powershell
-   # Use the Windows PowerShell deployment script
    .\docker-deploy.ps1 build
-   .\docker-deploy.ps1 start
    ```
 
-3. **Check Status**:
+### Step 4: Access the Application
+- Web Interface: http://localhost:5001
+- API Documentation: http://localhost:5001/api/docs
+
+## 📋 Detailed Setup Instructions
+
+### Docker Desktop Installation
+
+#### System Requirements
+- **Windows 10 64-bit**: Pro, Enterprise, or Education (Build 19041 or higher)
+- **Windows 11**: Any edition
+- **WSL 2** (Windows Subsystem for Linux) - automatically installed
+- **Hardware virtualization** must be enabled in BIOS
+- **4GB RAM minimum** (8GB+ recommended)
+
+#### Installation Steps
+1. **Download Docker Desktop**
+   - Visit https://www.docker.com/products/docker-desktop/
+   - Click "Download for Windows"
+   - Save the installer file
+
+2. **Run Installation**
    ```powershell
-   .\docker-deploy.ps1 status
+   # Right-click PowerShell and "Run as Administrator"
+   # Navigate to Downloads folder
+   cd $env:USERPROFILE\Downloads
+   
+   # Run the installer (replace with actual filename)
+   .\Docker Desktop Installer.exe
    ```
 
-## 🔧 **Managing the Application**
+3. **Configuration Options**
+   - ✅ **Enable WSL 2 integration** (recommended)
+   - ✅ **Add Docker to PATH**
+   - ✅ **Create desktop shortcut**
 
-### Method 1: Using PowerShell Script (Recommended)
+4. **Post-Installation**
+   - Restart Windows when prompted
+   - Launch Docker Desktop
+   - Complete the setup tutorial (optional)
+
+### Verify Docker Installation
 ```powershell
-# From the optionscalculator directory
-.\docker-deploy.ps1 start     # Start the application
-.\docker-deploy.ps1 stop      # Stop the application
-.\docker-deploy.ps1 restart   # Restart the application
-.\docker-deploy.ps1 logs      # View logs
-.\docker-deploy.ps1 status    # Check status
-.\docker-deploy.ps1 help      # Show all commands
+# Check Docker version
+docker --version
+# Should output: Docker version 24.x.x
+
+# Check Docker Compose
+docker-compose --version
+# Should output: Docker Compose version 2.x.x
+
+# Test Docker functionality
+docker run hello-world
 ```
 
-### Method 2: Using Docker Compose Directly
+## 🛠️ PowerShell Deployment Script
+
+### Using docker-deploy.ps1
+
+The project includes a native PowerShell script for Windows users:
+
 ```powershell
-# Starting the Application
-docker-compose up -d
+# Build and start the application
+.\docker-deploy.ps1 build
 
-# Stopping the Application
-docker-compose down
+# Start existing containers
+.\docker-deploy.ps1 start
 
-# Viewing Logs
-docker-compose logs -f
+# Stop containers
+.\docker-deploy.ps1 stop
 
-# Restarting the Application
-docker-compose restart
+# View logs
+.\docker-deploy.ps1 logs
 
-# Check Status
-docker-compose ps
+# Check status
+.\docker-deploy.ps1 status
+
+# Complete cleanup
+.\docker-deploy.ps1 clean
+
+# Show help
+.\docker-deploy.ps1 help
 ```
+
+### Manual Docker Commands
+
+If you prefer using Docker commands directly:
+
+```powershell
+# Build the image
+docker build -t options-analysis .
+
+# Run the container
+docker run -d `
+  --name options-analysis-app `
+  -p 5001:5001 `
+  -v ${PWD}/data:/app/data `
+  --env-file .env `
+  options-analysis
+
+# View logs
+docker logs options-analysis-app
+
+# Stop and remove
+docker stop options-analysis-app
+docker rm options-analysis-app
+```
+
+## 🔧 Configuration
+
+### Environment Setup
+1. **Copy the environment template**:
+   ```powershell
+   Copy-Item env_template.txt .env
+   ```
+
+2. **Edit the .env file** in your preferred text editor:
+   ```powershell
+   notepad .env
+   ```
+
+3. **Add your API keys** (optional for basic functionality):
+   ```
+   POLYGON_API_KEY=your_polygon_key_here
+   ALPHA_VANTAGE_API_KEY=your_alpha_vantage_key_here
+   ```
+
+### Data Persistence
+The application uses Docker volumes to persist data:
+- `./data/` folder is mounted to `/app/data` in the container
+- Analysis results and cached data are saved locally
+- Data survives container restarts
+
+## 🐛 Troubleshooting
+
+### Common Issues
+
+#### 1. "Docker Desktop failed to start"
+**Solution:**
+```powershell
+# Enable Windows features
+Enable-WindowsOptionalFeature -Online -FeatureName Microsoft-Windows-Subsystem-Linux
+Enable-WindowsOptionalFeature -Online -FeatureName VirtualMachinePlatform
+
+# Download and install WSL 2 kernel update
+# https://wslstorestorage.blob.core.windows.net/wslblob/wsl_update_x64.msi
+
+# Restart computer
+```
+
+#### 2. "Port 5001 is already in use"
+**Solution:**
+```powershell
+# Find what's using the port
+netstat -ano | findstr :5001
+
+# Kill the process (replace PID with actual process ID)
+taskkill /PID 1234 /F
+
+# Or use a different port
+.\docker-deploy.ps1 build -p 5002
+```
+
+#### 3. "Access denied" or Permission Errors
+**Solutions:**
+```powershell
+# Run PowerShell as Administrator
+Start-Process powershell -Verb RunAs
+
+# Add your user to Docker group (restart required)
+net localgroup docker-users "yourusername" /add
+
+# Check Docker Desktop is running
+Get-Process "Docker Desktop"
+```
+
+#### 4. "WSL 2 installation is incomplete"
+**Solution:**
+```powershell
+# Install WSL 2
+wsl --install
+
+# Set WSL 2 as default
+wsl --set-default-version 2
+
+# Restart computer
+```
+
+#### 5. Container Build Fails
+**Solutions:**
+```powershell
+# Clear Docker cache
+docker system prune -a
+
+# Check for proxy/firewall issues
+docker run --rm alpine ping google.com
+
+# Rebuild with no cache
+docker build --no-cache -t options-analysis .
+```
+
+### Performance Issues
+
+#### 1. Slow Container Startup
+```powershell
+# Allocate more memory to Docker Desktop
+# Docker Desktop → Settings → Resources → Advanced
+# Increase Memory to 4GB+
+```
+
+#### 2. File Watching Issues
+```powershell
+# If hot-reload doesn't work, restart container
+docker restart options-analysis-app
+```
+
+### Network Troubleshooting
+```powershell
+# Check if container is running
+docker ps
+
+# Test container connectivity
+docker exec options-analysis-app curl localhost:5001
+
+# Check Windows Firewall
+netsh advfirewall show allprofiles state
+```
+
+## 📚 Additional Commands
+
+### Container Management
+```powershell
+# List all containers
+docker ps -a
+
+# View container resource usage
+docker stats
+
+# Access container shell
+docker exec -it options-analysis-app /bin/bash
+
+# Copy files to/from container
+docker cp local-file.txt options-analysis-app:/app/
+docker cp options-analysis-app:/app/file.txt ./
+```
+
+### Image Management
+```powershell
+# List images
+docker images
+
+# Remove unused images
+docker image prune
+
+# Remove specific image
+docker rmi options-analysis
+```
+
+### Volume Management
+```powershell
+# List volumes
+docker volume ls
+
+# Inspect volume
+docker volume inspect options-analysis_data
+```
+
+## 🔄 Updates and Maintenance
 
 ### Updating the Application
 ```powershell
-# Pull latest changes
-git pull
+# Pull latest code
+git pull origin main
 
-# Method 1: Using PowerShell script
-.\docker-deploy.ps1 stop
+# Rebuild and restart
 .\docker-deploy.ps1 build
-.\docker-deploy.ps1 start
-
-# Method 2: Using docker-compose
-docker-compose down
-docker-compose up --build -d
 ```
 
-## 📊 **Adding Your Polygon.io API Key (Optional)**
+### Docker Desktop Updates
+- Docker Desktop auto-updates by default
+- Manual updates: Docker Desktop → Settings → Software Updates
 
-To get real market data, you can add your Polygon.io API key:
-
-1. **Create/Edit .env file**:
-   - In the `optionscalculator` folder, create a file named `.env`
-   - Add your API key:
-   ```
-   POLYGON_API_KEY=your_api_key_here
-   FLASK_ENV=production
-   DEBUG=false
-   ```
-
-2. **Restart the Application**:
-   ```powershell
-   docker-compose down
-   docker-compose up -d
-   ```
-
-## 🔍 **Troubleshooting**
-
-### Docker Desktop Not Starting
-- **Enable Virtualization**: Go to BIOS settings and enable Intel VT-x or AMD-V
-- **Enable Hyper-V**: In Windows Features, enable Hyper-V
-- **WSL 2**: Install Windows Subsystem for Linux 2
-
-### Port 5002 Already in Use
+### Cleanup Commands
 ```powershell
-# Check what's using the port
-netstat -ano | findstr :5002
+# Remove all stopped containers
+docker container prune
 
-# Or use a different port
-docker-compose down
-# Edit docker-compose.yml to change "5002:5001" to "5003:5001"
-docker-compose up -d
+# Remove all unused images
+docker image prune -a
+
+# Remove all unused volumes
+docker volume prune
+
+# Nuclear option - remove everything
+docker system prune -a --volumes
 ```
 
-### Application Won't Load
-1. **Check Docker is Running**:
+## 🎯 Best Practices
+
+### Security
+- Don't commit `.env` files with real API keys
+- Use strong passwords for any database connections
+- Keep Docker Desktop updated
+- Don't run containers as root in production
+
+### Performance
+- Allocate adequate RAM to Docker Desktop (4GB+)
+- Use SSD storage for better I/O performance
+- Close unnecessary applications when running containers
+- Monitor resource usage with `docker stats`
+
+### Development
+- Use volume mounts for active development
+- Keep containers lightweight
+- Use `.dockerignore` to exclude unnecessary files
+- Regular cleanup of unused images and containers
+
+## 📞 Support
+
+### Getting Help
+1. **Check logs first**:
    ```powershell
-   docker-compose ps
+   .\docker-deploy.ps1 logs
    ```
 
-2. **Check Logs**:
+2. **Docker Desktop logs**:
+   - Docker Desktop → Troubleshoot → Download logs
+
+3. **System information**:
    ```powershell
-   docker-compose logs
+   systeminfo | findstr /C:"OS" /C:"Memory"
+   docker version
    ```
 
-3. **Restart Everything**:
-   ```powershell
-   docker-compose down
-   docker-compose up -d
-   ```
+### Useful Resources
+- [Docker Desktop for Windows Documentation](https://docs.docker.com/desktop/windows/)
+- [WSL 2 Documentation](https://docs.microsoft.com/en-us/windows/wsl/)
+- [PowerShell Documentation](https://docs.microsoft.com/en-us/powershell/)
 
-### Container Build Errors
-```powershell
-# Clear Docker cache and rebuild
-docker system prune -a
-docker-compose build --no-cache
-```
+---
 
-## 📁 **File Structure After Setup**
-```
-Desktop/
-└── optionscalculator/
-    ├── docker-compose.yml     # Docker configuration
-    ├── Dockerfile            # Container definition
-    ├── .env                  # Your API keys (optional)
-    ├── app.py                # Main application
-    ├── requirements.txt      # Python dependencies
-    └── data/                 # Analysis results saved here
-```
+## 🎉 You're All Set!
 
-## 🎯 **What You Get**
-- **Professional Web Interface** at http://localhost:5002
-- **Real-time SPY/SPX Analysis** with live market data
-- **Options Chain View** with Greeks and probabilities
-- **Real Data Only Mode** for verified market data
-- **Export Capabilities** for saving analysis results
+Once Docker is running and the container is built, you can access:
 
-## 🔄 **Complete Removal**
-If you want to completely remove everything:
+- **Web Application**: http://localhost:5001
+- **API Documentation**: http://localhost:5001/api/docs
+- **Real-time Options Analysis**: Available in the web interface
 
-```powershell
-# Stop and remove containers
-docker-compose down
-
-# Remove images
-docker rmi optionscalculator_options-analyzer
-
-# Remove the folder
-cd ..
-Remove-Item -Recurse -Force optionscalculator
-```
-
-## 🆘 **Need Help?**
-
-### Quick Health Check
-```powershell
-# Check Docker is working
-docker --version
-
-# Check containers are running
-docker-compose ps
-
-# Check application logs
-docker-compose logs --tail=20
-```
-
-### Common Success Indicators
-- Docker Desktop shows green "running" status
-- `docker-compose ps` shows "Up" status
-- http://localhost:5002 loads the web interface
-- You can see options analysis data
-
-### If Nothing Works
-1. Restart Docker Desktop
-2. Restart your computer
-3. Try the Quick Start steps again
-4. Check Windows Defender isn't blocking Docker
-
-## 🎉 **You're Ready!**
-Once you see the Options Analysis interface at http://localhost:5002, you can:
-- Analyze SPY/SPX options with real market data
-- Use the "Real Data Only" toggle for verified market data
-- Export analysis results to CSV/JSON
-- Calculate expected moves and Greeks
-- Access professional options trading analysis tools
-
-The application runs completely isolated in Docker, so your Windows system stays clean! 
+The application will automatically start when you run the deployment script and will be accessible from any browser on your Windows machine. 

@@ -841,4 +841,33 @@ This system is designed for educational and research purposes. Always test thoro
 
 ---
 
-**⚠️ Disclaimer**: This software is for educational purposes only. Options trading involves substantial risk of loss. Always conduct your own analysis and risk management before trading. 
+**⚠️ Disclaimer**: This software is for educational purposes only. Options trading involves substantial risk of loss. Always conduct your own analysis and risk management before trading.
+
+## 🚀 Enhanced Scoring System v2.2.0
+
+The day trading score now includes **liquidity factors** for more realistic trading assessments:
+
+### Scoring Components
+- **35%** - Delta exposure (price movement sensitivity)
+- **25%** - Risk/Reward ratio (profit potential from expected moves)
+- **15%** - Affordability (inverse of premium cost)
+- **15%** - **Liquidity factors** ⭐ **NEW**
+- **10%** - Success probability (ITM probability)
+
+### Liquidity Factors Include:
+- **Open Interest Quality**: 0-500 (poor), 500-2000 (good), 2000+ (excellent)
+- **Volume Activity**: Daily volume relative to open interest
+- **Data Confidence**: Real data (HIGH) vs estimated (MEDIUM/LOW)
+- **Composite Liquidity Score**: From hybrid market data system
+
+### Benefits:
+- ✅ High-liquidity options get score boosts (+0.08 average)
+- ❌ Low-liquidity options get score penalties
+- 🎯 Better reflects real-world trading conditions
+- 🚫 Helps avoid illiquid options that are hard to execute
+
+### Score Interpretation:
+- **0.50+** = Excellent (high-conviction opportunities with good liquidity)
+- **0.35-0.50** = Good (solid opportunities)
+- **0.20-0.35** = Fair (marginal plays)
+- **<0.20** = Poor (avoid for day trading) 

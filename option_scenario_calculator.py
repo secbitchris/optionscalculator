@@ -370,10 +370,7 @@ class OptionsAnalyzer:
                 move_scenarios[f'{move_name}_change'] = price_change
                 move_scenarios[f'{move_name}_rr'] = rr_ratio
             
-            # Calculate day trading score
-            day_trade_score = self._calculate_day_trade_score(bs, move_scenarios, prob_data, expected_moves)
-            
-            # Get REAL liquidity metrics (OI + estimated volume)
+            # Get REAL liquidity metrics (OI + estimated volume) BEFORE scoring
             try:
                 from polygon_options_hybrid import PolygonOptionsHybrid
                 hybrid = PolygonOptionsHybrid()
@@ -398,6 +395,13 @@ class OptionsAnalyzer:
                     'spread': round(display_price * 0.06, 2),
                     'spread_pct': 6.0
                 }
+            
+            # Calculate day trading score WITH liquidity factors
+            day_trade_score = self._calculate_day_trade_score(bs, move_scenarios, prob_data, expected_moves, liquidity_data)
+            
+            # Debug logging for enhanced scoring (first few options only)
+            if len(rows) < 3:  # Only log first 3 options to avoid spam
+                print(f"🔢 Enhanced Score Debug - {option_type.upper()} ${K:.0f}: {day_trade_score:.4f} (OI: {liquidity_data.get('open_interest', 0)}, Vol: {liquidity_data.get('volume', 0)}, Liq: {liquidity_data.get('liquidity_score', 0):.3f})")
             
             row = {
                 'underlying': self.underlying,
@@ -446,15 +450,79 @@ class OptionsAnalyzer:
         df = pd.DataFrame(rows)
         return df.sort_values('day_trade_score', ascending=False)
 
-    def _calculate_day_trade_score(self, bs, move_scenarios, prob_data, expected_moves):
-        """Calculate composite day trading score"""
+    def _calculate_day_trade_score(self, bs, move_scenarios, prob_data, expected_moves, liquidity_data=None):
+        """
+        Calculate composite day trading score with liquidity factors
+        
+        NEW ENHANCED SCORING (v2.2.0):
+        - 35% Delta exposure (price sensitivity)
+        - 25% Risk/Reward ratio (profit potential)
+        - 15% Affordability (cost accessibility)
+        - 15% Liquidity factors (OI/Volume/Spreads)
+        - 10% Probability of success (ITM probability)
+        """
         primary_move = list(expected_moves.keys())[0]
         
+        # Base score components (reweighted to make room for liquidity)
+        delta_component = abs(bs['delta']) * 0.35  # Reduced from 0.4
+        rr_component = move_scenarios[f'{primary_move}_rr'] * 0.25  # Reduced from 0.3
+        affordability_component = (1 / (bs['price'] + 1)) * 0.15  # Reduced from 0.2
+        probability_component = prob_data['prob_itm'] * 0.10  # Same
+        
+        # NEW: Liquidity component (15% weight)
+        liquidity_component = 0.0
+        if liquidity_data:
+            # Liquidity score from hybrid system (0.0 to 1.0)
+            base_liquidity = liquidity_data.get('liquidity_score', 0.5)
+            
+            # Open Interest factor (higher OI = better liquidity)
+            oi = liquidity_data.get('open_interest', 0)
+            if oi > 0:
+                # Normalize OI: 0-500=poor(0.2), 500-2000=good(0.6), 2000+=excellent(1.0)
+                if oi >= 2000:
+                    oi_factor = 1.0
+                elif oi >= 500:
+                    oi_factor = 0.6 + (oi - 500) / 1500 * 0.4  # Scale from 0.6 to 1.0
+                else:
+                    oi_factor = 0.2 + (oi / 500) * 0.4  # Scale from 0.2 to 0.6
+            else:
+                oi_factor = 0.1  # Very poor liquidity
+            
+            # Volume factor (estimated daily volume relative to OI)
+            volume = liquidity_data.get('volume', 0)
+            if volume > 0 and oi > 0:
+                volume_ratio = volume / oi  # Typical range: 0.05 to 0.20
+                volume_factor = min(1.0, volume_ratio * 10)  # Scale to 0-1
+            else:
+                volume_factor = 0.3  # Default moderate score
+            
+            # Confidence factor (REAL data is better than estimated)
+            confidence = liquidity_data.get('confidence', 'LOW')
+            if confidence == 'HIGH':
+                confidence_factor = 1.0
+            elif confidence == 'MEDIUM':
+                confidence_factor = 0.7
+            else:
+                confidence_factor = 0.4
+            
+            # Composite liquidity score
+            liquidity_component = (
+                base_liquidity * 0.4 +      # 40% - Overall liquidity score
+                oi_factor * 0.35 +          # 35% - Open Interest quality
+                volume_factor * 0.15 +      # 15% - Volume activity
+                confidence_factor * 0.10    # 10% - Data confidence
+            ) * 0.15  # Apply 15% weight to total score
+        else:
+            # Fallback: moderate liquidity penalty
+            liquidity_component = 0.5 * 0.15
+        
+        # Total enhanced score
         score = (
-            abs(bs['delta']) * 0.4 +  # Delta exposure
-            move_scenarios[f'{primary_move}_rr'] * 0.3 +  # R/R ratio
-            (1 / (bs['price'] + 1)) * 0.2 +  # Affordability
-            prob_data['prob_itm'] * 0.1  # Probability
+            delta_component +
+            rr_component +
+            affordability_component +
+            liquidity_component +
+            probability_component
         )
         
         return score
@@ -482,7 +550,15 @@ class OptionsAnalyzer:
             'best_call_strikes': best_calls['strike'].tolist(),
             'best_put_strikes': best_puts['strike'].tolist(),
             'analysis_timestamp': datetime.now().isoformat(),
-            'config_used': self.config
+            'config_used': self.config,
+            'scoring_version': 'v2.2.0-liquidity-enhanced',
+            'scoring_components': {
+                'delta_exposure': '35%',
+                'risk_reward_ratio': '25%', 
+                'affordability': '15%',
+                'liquidity_factors': '15%',
+                'success_probability': '10%'
+            }
         }
         
         return summary
