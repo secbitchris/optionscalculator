@@ -13,6 +13,7 @@ class OptionsAnalysisDashboard {
         this.bindEvents();
         this.checkAPIStatus();
         this.loadConfig();
+        this.loadExpirationDates();
     }
     
     bindEvents() {
@@ -54,9 +55,19 @@ class OptionsAnalysisDashboard {
             this.exportCSV();
         });
         
+        document.getElementById('export-json-btn').addEventListener('click', () => {
+            this.exportJSON();
+        });
+        
         // Underlying symbol change
         document.getElementById('underlying').addEventListener('change', () => {
             this.onUnderlyingChange();
+            this.loadExpirationDates();
+        });
+        
+        // Expiration date change
+        document.getElementById('expiration-date').addEventListener('change', () => {
+            this.onExpirationDateChange();
         });
         
         // Auto-fill scenario price when current price changes
@@ -515,6 +526,7 @@ class OptionsAnalysisDashboard {
     enableActionButtons() {
         document.getElementById('save-btn').disabled = false;
         document.getElementById('export-btn').disabled = false;
+        document.getElementById('export-json-btn').disabled = false;
     }
     
     async saveResults() {
@@ -584,9 +596,153 @@ class OptionsAnalysisDashboard {
         window.URL.revokeObjectURL(url);
     }
     
+    exportJSON() {
+        if (!this.currentResults || !this.currentSummary) return;
+        
+        // Create complete JSON export with both summary and full results
+        const exportData = {
+            analysis_metadata: {
+                export_timestamp: new Date().toISOString(),
+                export_source: 'Options Analysis Web App',
+                total_options: this.currentResults.length
+            },
+            summary: this.currentSummary,
+            complete_options_data: this.currentResults,
+            calls: this.currentResults.filter(r => r.type === 'CALL'),
+            puts: this.currentResults.filter(r => r.type === 'PUT')
+        };
+        
+        // Download JSON
+        const jsonString = JSON.stringify(exportData, null, 2);
+        const blob = new Blob([jsonString], { type: 'application/json' });
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `options_analysis_complete_${new Date().toISOString().slice(0, 10)}.json`;
+        a.click();
+        window.URL.revokeObjectURL(url);
+        
+        this.showAlert('Complete JSON data exported successfully!', 'success');
+    }
+    
     onUnderlyingChange() {
         // Clear current price when underlying changes
         document.getElementById('current_price').value = '';
+    }
+    
+    async loadExpirationDates() {
+        const underlying = document.getElementById('underlying').value;
+        const select = document.getElementById('expiration-date');
+        
+        // Show loading
+        select.innerHTML = '<option value="">Loading expiration dates...</option>';
+        
+        try {
+            const response = await fetch(`/api/expiration-dates/${underlying}`);
+            const data = await response.json();
+            
+            if (data.success) {
+                // Clear existing options
+                select.innerHTML = '';
+                
+                // Add default option
+                const defaultOption = document.createElement('option');
+                defaultOption.value = '';
+                defaultOption.textContent = 'Select expiration date...';
+                select.appendChild(defaultOption);
+                
+                // Add expiration dates
+                data.expiration_dates.forEach(exp => {
+                    const option = document.createElement('option');
+                    option.value = exp.date;
+                    option.dataset.dte = exp.dte;
+                    option.dataset.expiryType = exp.expiry_type;
+                    option.dataset.economicEvents = JSON.stringify(exp.economic_events);
+                    option.dataset.isMonthly = exp.is_monthly;
+                    option.dataset.isQuarterly = exp.is_quarterly;
+                    
+                    // Build display text
+                    let displayText = exp.display_date;
+                    if (exp.economic_events.length > 0) {
+                        displayText += ` (${exp.economic_events.join(', ')})`;
+                    }
+                    
+                    option.textContent = displayText;
+                    select.appendChild(option);
+                });
+                
+                // Auto-select the first weekly expiration (usually within 7-14 days)
+                const weeklyOptions = data.expiration_dates.filter(exp => !exp.is_monthly && exp.dte <= 14);
+                if (weeklyOptions.length > 0) {
+                    select.value = weeklyOptions[0].date;
+                    this.onExpirationDateChange();
+                }
+                
+            } else {
+                select.innerHTML = '<option value="">Error loading dates</option>';
+                this.showAlert('Error loading expiration dates: ' + data.error, 'danger');
+            }
+        } catch (error) {
+            console.error('Error loading expiration dates:', error);
+            select.innerHTML = '<option value="">Error loading dates</option>';
+            this.showAlert('Network error loading expiration dates', 'danger');
+        }
+    }
+    
+    onExpirationDateChange() {
+        const select = document.getElementById('expiration-date');
+        const selectedOption = select.selectedOptions[0];
+        
+        if (selectedOption && selectedOption.value) {
+            const dte = selectedOption.dataset.dte;
+            const expiryType = selectedOption.dataset.expiryType;
+            const economicEvents = JSON.parse(selectedOption.dataset.economicEvents || '[]');
+            
+            // Update display elements
+            document.getElementById('dte-display').textContent = `${dte} DTE`;
+            document.getElementById('expiry-type').textContent = expiryType;
+            
+            // Update economic events display
+            const eventsElement = document.getElementById('economic-events');
+            if (economicEvents.length > 0) {
+                eventsElement.innerHTML = economicEvents.map(event => {
+                    let badgeClass = 'bg-warning text-dark';
+                    
+                    // Color code by importance
+                    if (event === 'FOMC' || event === 'CPI') {
+                        badgeClass = 'bg-danger text-white';
+                    } else if (event === 'OPEX' || event === 'VIXperation' || event === 'PPI') {
+                        badgeClass = 'bg-orange text-white';
+                    } else if (event === 'Earnings') {
+                        badgeClass = 'bg-info text-white';
+                    }
+                    
+                    return `<span class="badge ${badgeClass} ms-1">${event}</span>`;
+                }).join('');
+            } else {
+                eventsElement.innerHTML = '';
+            }
+            
+            // Update the form's dte field for backend compatibility
+            const hiddenDTE = document.getElementById('dte') || this.createHiddenDTEField();
+            hiddenDTE.value = dte;
+            
+        } else {
+            // Clear displays
+            document.getElementById('dte-display').textContent = '-';
+            document.getElementById('expiry-type').textContent = '-';
+            document.getElementById('economic-events').innerHTML = '';
+        }
+    }
+    
+    createHiddenDTEField() {
+        // Create hidden DTE field for backend compatibility
+        const hiddenField = document.createElement('input');
+        hiddenField.type = 'hidden';
+        hiddenField.id = 'dte';
+        hiddenField.name = 'dte';
+        document.getElementById('analysis-form').appendChild(hiddenField);
+        return hiddenField;
     }
     
     autoFillScenarioPrice() {

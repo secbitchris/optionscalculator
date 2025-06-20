@@ -621,6 +621,104 @@ def calculate_expected_moves_hybrid():
         print(f"❌ Error calculating expected moves: {e}")
         return jsonify({'error': str(e)}), 500
 
+@app.route('/api/expiration-dates/<symbol>')
+def get_expiration_dates(symbol):
+    """Get options expiration dates with economic event information"""
+    try:
+        from datetime import datetime, timedelta
+        import calendar
+        
+        # Get current date
+        today = datetime.now()
+        current_year = today.year
+        current_month = today.month
+        
+        expiration_dates = []
+        
+        # Generate next 12 months of expiration dates
+        for month_offset in range(12):
+            target_date = today + timedelta(days=30 * month_offset)
+            year = target_date.year
+            month = target_date.month
+            
+            # Weekly expirations (Fridays)
+            for week in range(5):  # Up to 5 weeks per month
+                # Find the Friday of each week
+                first_day = datetime(year, month, 1)
+                first_friday = first_day + timedelta(days=(4 - first_day.weekday()) % 7)
+                friday = first_friday + timedelta(weeks=week)
+                
+                # Only include if it's in the current month and in the future
+                if friday.month == month and friday >= today:
+                    dte = (friday - today).days
+                    if dte <= 365:  # Limit to 1 year
+                        
+                        # Determine expiry type
+                        is_monthly = friday.day >= 15 and friday.day <= 21  # 3rd Friday typically
+                        is_quarterly = month % 3 == 0 and is_monthly
+                        
+                        # Check for economic events
+                        economic_events = []
+                        
+                        # OPEX (3rd Friday of every month)
+                        if is_monthly:
+                            economic_events.append("OPEX")
+                        
+                        # VIXperation (Wednesday before 3rd Friday)
+                        vix_date = friday - timedelta(days=2)
+                        if abs((vix_date - friday).days) <= 2:
+                            economic_events.append("VIXperation")
+                        
+                        # FOMC meetings (approximate dates - 8 times per year)
+                        fomc_months = [1, 3, 5, 6, 7, 9, 11, 12]  # Typical FOMC months
+                        if month in fomc_months and 15 <= friday.day <= 25:
+                            economic_events.append("FOMC")
+                        
+                        # CPI (usually 2nd Tuesday of month)
+                        second_tuesday = first_day + timedelta(days=(1 - first_day.weekday()) % 7 + 7)
+                        if abs((friday - second_tuesday).days) <= 3:
+                            economic_events.append("CPI")
+                        
+                        # PPI (usually day before CPI)
+                        ppi_date = second_tuesday - timedelta(days=1)
+                        if abs((friday - ppi_date).days) <= 3:
+                            economic_events.append("PPI")
+                        
+                        # Earnings season (roughly 4 times per year)
+                        earnings_months = [1, 4, 7, 10]  # Typical earnings months
+                        if month in earnings_months:
+                            economic_events.append("Earnings")
+                        
+                        expiry_type = "Monthly" if is_monthly else "Weekly"
+                        if is_quarterly:
+                            expiry_type = "Quarterly"
+                        
+                        expiration_dates.append({
+                            'date': friday.strftime('%Y-%m-%d'),
+                            'display_date': friday.strftime('%a %b %d, %Y'),
+                            'dte': dte,
+                            'expiry_type': expiry_type,
+                            'economic_events': economic_events,
+                            'is_monthly': is_monthly,
+                            'is_quarterly': is_quarterly
+                        })
+        
+        # Sort by date
+        expiration_dates.sort(key=lambda x: x['date'])
+        
+        return jsonify({
+            'success': True,
+            'symbol': symbol.upper(),
+            'expiration_dates': expiration_dates,
+            'timestamp': datetime.now().isoformat()
+        })
+        
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 400
+
 if __name__ == '__main__':
     # Create data directory if it doesn't exist
     os.makedirs('data', exist_ok=True)

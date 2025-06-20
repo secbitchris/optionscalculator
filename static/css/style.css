@@ -351,6 +351,42 @@ body {
     height: 3rem;
 }
 
+/* Expiration Date Styling */
+#expiration-date option {
+    padding: 0.5rem;
+}
+
+.economic-events .badge {
+    font-size: 0.7rem;
+    margin-left: 0.25rem;
+}
+
+/* Economic Event Color Coding */
+.badge.bg-warning.text-dark {
+    --bs-bg-opacity: 0.8;
+}
+
+/* Expiration date form text styling */
+.form-text .text-muted {
+    font-size: 0.75rem;
+}
+
+.form-text .badge {
+    font-size: 0.65rem;
+    padding: 0.2rem 0.4rem;
+    margin-left: 0.25rem;
+}
+
+/* Economic event badges with specific colors */
+.badge.bg-danger {
+    background-color: #dc3545 !important;
+}
+
+.badge.bg-orange {
+    background-color: #fd7e14 !important;
+    color: white !important;
+}
+
 /* Badge improvements for OI/Volume */
 .badge {
     font-size: 0.7em;

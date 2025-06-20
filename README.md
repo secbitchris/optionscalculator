@@ -75,13 +75,24 @@ python run_webapp.py --port 5002
 # Features: Real market IV detection, live prices, hybrid analysis, professional UI
 ```
 
+### 🎯 **Professional Web Interface Features:**
+- **Real Expiration Dates** - Dropdown selector with actual Friday expiration dates
+- **Economic Event Indicators** - OPEX, VIXpiration, CPI, PPI, FOMC labels next to dates
+- **Options Chain View** - Traditional broker-style layout with calls|strike|puts
+- **ATM Highlighting** - Yellow background for strikes within $5 of current price
+- **Color-Coded ITM/OTM** - Green for ITM, red for OTM options
+- **Real-Time Data Integration** - Live prices, market IV, and Open Interest
+- **Export Capabilities** - CSV and JSON export with complete options data
+- **Responsive Design** - Works on desktop, tablet, and mobile devices
+
 ### 🔥 **New Real Market Features:**
 1. **Auto-Detect Market IV** - Click the blue eye button (👁️) next to IV field
 2. **Fetch Live Prices** - Real SPY prices from Polygon.io basic API
 3. **Real Expected Moves** - Uses proper formula: Price × IV × √(T/252)
 4. **Market IV Sources** - VIX (20.1%) → VIX9D → Historical → 15% fallback
-5. **No Premium Subscription Needed** - Works with basic Polygon.io API ($0-$30/month)
-6. **Frontend Integration** - Seamless one-click market data detection
+5. **Professional Expiration Dates** - Real Friday expirations with economic event indicators (OPEX, CPI, FOMC)
+6. **No Premium Subscription Needed** - Works with basic Polygon.io API ($0-$30/month)
+7. **Frontend Integration** - Seamless one-click market data detection
 
 ### 📱 **Command Line Analysis**
 ```bash
