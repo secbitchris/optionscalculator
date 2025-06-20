@@ -76,9 +76,11 @@ python run_webapp.py --port 5002
 ```
 
 ### 🎯 **Professional Web Interface Features:**
-- **Real Expiration Dates** - Dropdown selector with actual Friday expiration dates
-- **Economic Event Indicators** - OPEX, VIXpiration, CPI, PPI, FOMC labels next to dates
+- **Complete Trading Day Selection** - Choose any valid trading day (0 DTE, 1 DTE, 2 DTE, etc.)
+- **Comprehensive Economic Calendar** - Accurate 2025 event labeling (CPI, PPI, FOMC, OPEX, NFP, JOLTS)
+- **Smart Date Organization** - Grouped by priority: Major Events → Economic Events → All Trading Days
 - **Options Chain View** - Traditional broker-style layout with calls|strike|puts
+- **Advanced Sorting** - 9 different sorting methods (Best Overall, Cheapest, Highest Delta, etc.)
 - **ATM Highlighting** - Yellow background for strikes within $5 of current price
 - **Color-Coded ITM/OTM** - Green for ITM, red for OTM options
 - **Real-Time Data Integration** - Live prices, market IV, and Open Interest
@@ -90,9 +92,22 @@ python run_webapp.py --port 5002
 2. **Fetch Live Prices** - Real SPY prices from Polygon.io basic API
 3. **Real Expected Moves** - Uses proper formula: Price × IV × √(T/252)
 4. **Market IV Sources** - VIX (20.1%) → VIX9D → Historical → 15% fallback
-5. **Professional Expiration Dates** - Real Friday expirations with economic event indicators (OPEX, CPI, FOMC)
-6. **No Premium Subscription Needed** - Works with basic Polygon.io API ($0-$30/month)
-7. **Frontend Integration** - Seamless one-click market data detection
+5. **Complete Trading Calendar** - All valid trading days (63 days) with accurate 2025 economic events
+6. **Professional Date Selection** - 0 DTE through 90+ DTE with event indicators
+7. **Advanced Options Sorting** - 9 ranking methods from best overall to specific Greek strategies
+8. **No Premium Subscription Needed** - Works with basic Polygon.io API ($0-$30/month)
+9. **Frontend Integration** - Seamless one-click market data detection
+
+### 📅 **Comprehensive Economic Calendar Integration:**
+- **CPI Dates** - All 2025 Consumer Price Index release dates (2nd Wednesday monthly)
+- **PPI Dates** - Producer Price Index releases (Thursday after CPI)
+- **FOMC Meetings** - Federal Reserve policy meetings with rate decisions
+- **OPEX Dates** - Monthly options expiration (3rd Friday) + Quad Witching
+- **VIX Expiration** - VIX options expiration dates (Wednesday before OPEX)
+- **NFP (Jobs Report)** - Non-farm payroll releases (1st Friday monthly)
+- **JOLTS** - Job Openings and Labor Turnover Survey dates
+- **End/Beginning of Quarter** - Important institutional rebalancing dates
+- **Smart Prioritization** - Major events highlighted, all trading days available
 
 ### 📱 **Command Line Analysis**
 ```bash

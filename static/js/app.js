@@ -339,6 +339,9 @@ class OptionsAnalysisDashboard {
             const call = calls.find(c => c.strike === strike);
             const put = puts.find(p => p.strike === strike);
             
+            // Skip strikes that have neither call nor put (shouldn't happen but safety check)
+            if (!call && !put) return;
+            
             const tr = document.createElement('tr');
             
             // Determine if this is ATM (within $5 of current price)
