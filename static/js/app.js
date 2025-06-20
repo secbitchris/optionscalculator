@@ -87,6 +87,10 @@ class OptionsAnalysisDashboard {
             console.log('Sort dropdown changed to:', e.target.value);
             this.applySorting();
         });
+        
+        // Initialize sorting state
+        this.currentSortColumn = null;
+        this.currentSortDirection = 'desc';
     }
     
     async checkAPIStatus() {
@@ -335,7 +339,7 @@ class OptionsAnalysisDashboard {
         const tbody = document.getElementById('chain-tbody');
         tbody.innerHTML = '';
         
-        // Get all unique strikes, sorted
+        // Chain view always maintains strike order for traditional options chain readability
         const allStrikes = [...new Set([...calls.map(c => c.strike), ...puts.map(p => p.strike)])].sort((a, b) => a - b);
         
         allStrikes.forEach(strike => {
@@ -452,55 +456,78 @@ class OptionsAnalysisDashboard {
         }
     }
     
-    applySorting() {
+    // New column-based sorting system
+    sortByColumn(column, direction = null) {
         if (!this.currentResults) {
             console.log('No current results to sort');
             return;
         }
         
-        const sortBy = document.getElementById('sort-options').value;
-        console.log('Sorting by:', sortBy);
+        // Toggle direction if not specified
+        if (!direction) {
+            if (this.currentSortColumn === column) {
+                this.currentSortDirection = this.currentSortDirection === 'desc' ? 'asc' : 'desc';
+            } else {
+                this.currentSortDirection = 'desc'; // Default to descending for most columns
+                // Exception: premium defaults to ascending (cheapest first)
+                if (column === 'premium') this.currentSortDirection = 'asc';
+            }
+        } else {
+            this.currentSortDirection = direction;
+        }
         
-        // Get sorting function
-        const getSortFunction = (sortBy) => {
-            switch(sortBy) {
-                case 'day_trade_score':
-                    return (a, b) => b.day_trade_score - a.day_trade_score;
-                case 'premium_asc':
-                    return (a, b) => a.premium - b.premium;
-                case 'premium_desc':
-                    return (a, b) => b.premium - a.premium;
-                case 'delta_desc':
-                    return (a, b) => Math.abs(b.delta) - Math.abs(a.delta);
-                case 'gamma_desc':
-                    return (a, b) => b.gamma - a.gamma;
-                case 'prob_profit':
-                    return (a, b) => (b.prob_itm || 0) - (a.prob_itm || 0);
-                case 'liquidity_score':
-                    return (a, b) => (b.liquidity_score || 0) - (a.liquidity_score || 0);
+        this.currentSortColumn = column;
+        
+        console.log(`Sorting by ${column} (${this.currentSortDirection})`);
+        
+        // Get sorting function based on column and direction
+        const getSortFunction = (column, direction) => {
+            const isAsc = direction === 'asc';
+            const multiplier = isAsc ? 1 : -1;
+            
+            switch(column) {
+                case 'strike':
+                    return (a, b) => (a.strike - b.strike) * multiplier;
+                case 'premium':
+                    return (a, b) => (a.premium - b.premium) * multiplier;
+                case 'delta':
+                    return (a, b) => (Math.abs(a.delta) - Math.abs(b.delta)) * multiplier;
+                case 'gamma':
+                    return (a, b) => (a.gamma - b.gamma) * multiplier;
+                case 'theta':
+                    return (a, b) => (a.theta - b.theta) * multiplier;
+                case 'vega':
+                    return (a, b) => (a.vega - b.vega) * multiplier;
                 case 'open_interest':
-                    return (a, b) => (b.open_interest || 0) - (a.open_interest || 0);
-                case 'target_rr':
-                    return (a, b) => (b.aggressive_rr || 0) - (a.aggressive_rr || 0);
+                    return (a, b) => ((a.open_interest || 0) - (b.open_interest || 0)) * multiplier;
+                case 'volume':
+                    return (a, b) => ((a.volume || 0) - (b.volume || 0)) * multiplier;
+                case 'score':
+                case 'day_trade_score':
+                    return (a, b) => (a.day_trade_score - b.day_trade_score) * multiplier;
+                case 'rr_ratio':
+                case 'aggressive_rr':
+                    return (a, b) => ((a.aggressive_rr || 0) - (b.aggressive_rr || 0)) * multiplier;
+                case 'prob_itm':
+                    return (a, b) => ((a.prob_itm || 0) - (b.prob_itm || 0)) * multiplier;
                 default:
-                    return (a, b) => b.day_trade_score - a.day_trade_score;
+                    return (a, b) => (a.day_trade_score - b.day_trade_score) * multiplier;
             }
         };
         
-        const sortFunction = getSortFunction(sortBy);
+        const sortFunction = getSortFunction(column, this.currentSortDirection);
         
         // Sort the data arrays
-        const originalCallsLength = this.callsData.length;
-        const originalPutsLength = this.putsData.length;
-        
         this.callsData = [...this.callsData].sort(sortFunction);
         this.putsData = [...this.putsData].sort(sortFunction);
         
-        console.log(`Sorted ${originalCallsLength} calls and ${originalPutsLength} puts`);
+        console.log(`Sorted ${this.callsData.length} calls and ${this.putsData.length} puts by ${column} (${this.currentSortDirection})`);
+        
+        // Update sort indicators
+        this.updateSortIndicators(column, this.currentSortDirection);
         
         // Rebuild the current view
         const activeView = document.querySelector('input[name="options-filter"]:checked').id;
-        console.log('Active view:', activeView);
         
         switch(activeView) {
             case 'filter-all':
@@ -515,16 +542,56 @@ class OptionsAnalysisDashboard {
         }
         
         console.log('Sorting complete');
+    }
+    
+    updateSortIndicators(activeColumn, direction) {
+        // Remove all existing sort indicators
+        document.querySelectorAll('.sort-indicator').forEach(indicator => {
+            indicator.remove();
+        });
         
-        // Show a brief visual feedback for sorting
-        const sortDropdown = document.getElementById('sort-options');
-        const originalBg = sortDropdown.style.backgroundColor;
-        sortDropdown.style.backgroundColor = '#28a745';
-        sortDropdown.style.color = 'white';
-        setTimeout(() => {
-            sortDropdown.style.backgroundColor = originalBg;
-            sortDropdown.style.color = '';
-        }, 500);
+        // Add sort indicator to active column
+        const headers = document.querySelectorAll('th[data-sort]');
+        headers.forEach(header => {
+            if (header.dataset.sort === activeColumn) {
+                const indicator = document.createElement('span');
+                indicator.className = 'sort-indicator';
+                indicator.innerHTML = direction === 'asc' ? ' ↑' : ' ↓';
+                indicator.style.color = '#007bff';
+                indicator.style.fontWeight = 'bold';
+                header.appendChild(indicator);
+            }
+        });
+    }
+    
+    // Legacy sorting method for dropdown compatibility
+    applySorting() {
+        const sortBy = document.getElementById('sort-options').value;
+        
+        // Map dropdown values to column names
+        const columnMap = {
+            'day_trade_score': 'score',
+            'premium_asc': 'premium',
+            'premium_desc': 'premium',
+            'delta_desc': 'delta',
+            'gamma_desc': 'gamma',
+            'prob_profit': 'prob_itm',
+            'liquidity_score': 'volume',
+            'open_interest': 'open_interest',
+            'target_rr': 'rr_ratio'
+        };
+        
+        const directionMap = {
+            'premium_asc': 'asc',
+            'premium_desc': 'desc',
+            'delta_desc': 'desc',
+            'gamma_desc': 'desc'
+        };
+        
+        const column = columnMap[sortBy] || 'score';
+        const direction = directionMap[sortBy] || 'desc';
+        
+        this.sortByColumn(column, direction);
     }
     
     // Helper methods for formatting
@@ -602,6 +669,14 @@ class OptionsAnalysisDashboard {
         document.getElementById('welcome-message').classList.add('d-none');
         document.getElementById('results-container').classList.remove('d-none');
         document.getElementById('results-container').classList.add('fade-in');
+        document.getElementById('filter-controls').classList.remove('d-none');
+        document.getElementById('summary-cards').classList.remove('d-none');
+        
+        // Enable export buttons
+        this.enableActionButtons();
+        
+        // Bind sortable header click events
+        this.bindSortableHeaders();
     }
     
     hideResults() {
@@ -613,6 +688,27 @@ class OptionsAnalysisDashboard {
         document.getElementById('save-btn').disabled = false;
         document.getElementById('export-btn').disabled = false;
         document.getElementById('export-json-btn').disabled = false;
+    }
+    
+    bindSortableHeaders() {
+        // Remove existing event listeners to prevent duplicates
+        document.querySelectorAll('.sortable-header').forEach(header => {
+            const newHeader = header.cloneNode(true);
+            header.parentNode.replaceChild(newHeader, header);
+        });
+        
+        // Add click event listeners to all sortable headers
+        document.querySelectorAll('.sortable-header').forEach(header => {
+            header.addEventListener('click', (e) => {
+                const column = e.target.dataset.sort;
+                if (column) {
+                    console.log(`Header clicked: ${column}`);
+                    this.sortByColumn(column);
+                }
+            });
+        });
+        
+        console.log('Sortable headers bound:', document.querySelectorAll('.sortable-header').length);
     }
     
     async saveResults() {
