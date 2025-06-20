@@ -299,7 +299,18 @@ class OptionsAnalysisDashboard {
                     this.showAlert('Analysis completed with REAL DATA ONLY - all estimated values filtered out', 'success');
                 }
             } else {
-                this.showAlert('Analysis error: ' + result.error, 'danger');
+                // Enhanced error message for real-data-only mode
+                if (realDataOnly && result.error.includes('Available DTEs:')) {
+                    const match = result.error.match(/Available DTEs: \[(.*?)\]/);
+                    if (match) {
+                        const availableDTEs = match[1];
+                        this.showAlert(`Real Data Only Mode: No contracts found for ${data.dte} DTE. Available DTEs: ${availableDTEs}. Try one of these DTE values.`, 'warning');
+                    } else {
+                        this.showAlert('Real Data Only Mode - ' + result.error, 'warning');
+                    }
+                } else {
+                    this.showAlert('Analysis error: ' + result.error, 'danger');
+                }
             }
         } catch (error) {
             console.error('Error running analysis:', error);

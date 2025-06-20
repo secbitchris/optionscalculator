@@ -312,7 +312,7 @@ class PolygonOptionsHybrid:
                 try:
                     exp_date = datetime.strptime(expiry, '%Y-%m-%d')
                     current_date = datetime.now()
-                    contract_dte = (exp_date - current_date).days
+                    contract_dte = (exp_date.date() - current_date.date()).days
                 except:
                     contract_dte = dte  # Fallback to requested DTE
                 
@@ -392,6 +392,25 @@ class PolygonOptionsHybrid:
         real_contracts.sort(key=lambda x: x['strike'])
         
         print(f"✅ Created {len(real_contracts)} contracts with REAL data only")
+        
+        # If no contracts found, provide helpful error message
+        if len(real_contracts) == 0:
+            # Collect available DTEs
+            available_dtes = set()
+            for key, oi_info in real_oi_data.items():
+                try:
+                    expiry = oi_info['expiry']
+                    exp_date = datetime.strptime(expiry, '%Y-%m-%d')
+                    current_date = datetime.now()
+                    contract_dte = (exp_date.date() - current_date.date()).days
+                    available_dtes.add(contract_dte)
+                except:
+                    pass
+            
+            available_dtes = sorted(list(available_dtes))
+            error_msg = f"No real data available for {underlying} with {dte} DTE. Available DTEs: {available_dtes}"
+            print(f"❌ {error_msg}")
+            raise ValueError(error_msg)
         
         return {
             'underlying': underlying,

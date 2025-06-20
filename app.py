@@ -180,12 +180,13 @@ def analyze_options_real_only():
         # Add enhanced scoring to each contract
         analyzer = get_analyzer(underlying)
         for contract in contracts:
-            # Calculate day trading score
-            contract['day_trade_score'] = analyzer.calculate_enhanced_day_trade_score(
-                contract['delta'], contract['theoretical_price'], 
-                contract.get('open_interest', 0), contract.get('volume') or 0,
-                contract['liquidity_score']
-            )
+            # Calculate simplified day trading score for real-data-only mode
+            # This score combines delta exposure, affordability, and liquidity
+            delta_factor = abs(contract['delta']) * 0.4  # Delta exposure weight
+            affordability_factor = (1 / (contract['theoretical_price'] + 0.01)) * 0.3  # Affordability weight
+            liquidity_factor = contract['liquidity_score'] * 0.3  # Liquidity weight
+            
+            contract['day_trade_score'] = delta_factor + affordability_factor + liquidity_factor
             
             # Add probability metrics
             contract['prob_itm'] = abs(contract['delta'])
